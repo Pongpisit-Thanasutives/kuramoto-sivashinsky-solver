@@ -7,8 +7,8 @@ DATA_PATH = "data/kuramoto_sivishinky.mat"
 
 from utils import *
 from lbfgsnew import *
-# from helper.models import *
-# from helper.preprocess import *
+from models import *
+from preprocess import *
 
 import torch
 from torch import nn

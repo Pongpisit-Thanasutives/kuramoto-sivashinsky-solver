@@ -1,7 +1,9 @@
 matplotlib
+sympy
 pyDOE
 complexPyTorch
 cplxmodule
 findiff
 pyGRNN
 madgrad
+tqdm
