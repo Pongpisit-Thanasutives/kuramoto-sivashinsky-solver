@@ -1,0 +1,7 @@
+matplotlib
+pyDOE
+complexPyTorch
+cplxmodule
+findiff
+pyGRNN
+madgrad
