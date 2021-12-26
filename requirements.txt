@@ -3,6 +3,7 @@ sympy
 pyDOE
 complexPyTorch
 cplxmodule
+sympytorch
 findiff
 pyGRNN
 madgrad
