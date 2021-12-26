@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 
+def scientific2string(x):
+    return format(x, '.1e')
+
 def dimension_slicing(a_tensor):
     c = a_tensor.shape[-1]
     out = []
