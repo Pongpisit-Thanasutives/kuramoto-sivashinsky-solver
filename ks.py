@@ -2,7 +2,8 @@
 import os
 from glob import glob
 
-DATA_PATH = "data/KS_chaotic.mat"
+# DATA_PATH = "data/KS_chaotic.mat"
+DATA_PATH = "data/kuramoto_sivishinky.mat"
 
 from utils import *
 from lbfgsnew import *
@@ -25,11 +26,13 @@ print("Using", device)
 
 data = loadmat(DATA_PATH)
 
-t = data['t'].flatten()[:,None]
+t = data['tt'].flatten()[:,None]
 x = data['x'].flatten()[:,None]
-Exact = np.real(data['usol'])
-
+Exact = np.real(data['uu'])
 T_sol, X_sol = np.meshgrid(t, x)
+
+if (X_sol.shape == T_sol.shape == Exact.shape): print("Shapes OK!")
+else: print("Shapes NOT OK!")
 
 x_star = X_sol.flatten()[:,None]
 t_star = T_sol.flatten()[:,None]
@@ -42,7 +45,8 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-N = 60000
+# N = 60000
+N = 75000
 
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 X_train = X_star[idx,:]
@@ -236,4 +240,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
