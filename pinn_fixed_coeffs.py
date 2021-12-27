@@ -36,7 +36,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: X_u_train = perturb(X_u_train, noise_intensity); print("Noisy (x, t)")
 else: print("Clean (x, t)")
 if noisy_labels: u_train = perturb(u_train, noise_intensity); print("Noisy labels")
@@ -75,22 +75,25 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 #     + (-1.006815 +0.000000i)u_{xx}
 #     + (-1.005177 +0.000000i)u_{xxxx}
 
-program = None
+program = None; name = None
 if state == 0:
     program = [-1.0161751508712769, -0.9876205325126648, -0.9817131161689758]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
+    name = "cleanall"
 elif state == 1:
     program = [-0.9498964548110962, -0.9398553967475891, -1.0064408779144287]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
+    name = "noisy1"
 elif state == 2:
     program = [-1.025016188621521, -0.8882913589477539, -0.9990026354789734]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
+    name = "noisy2"
 
 pde_expr, variables = build_exp(program); print(pde_expr, variables)
 mod = sympytorch.SymPyModule(expressions=[pde_expr]); mod.train()
@@ -265,7 +268,7 @@ def mtl_closure():
 epochs1, epochs2 = 1000, 50
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
-pinn.train(); best_loss = 1e6; saved_weights = "./weights/dft_fixedcoeffs_cleanall.pth"; saved_last_weights = "./weights/dft_fixedcoeffs_last_cleanall.pth"
+pinn.train(); best_loss = 1e6; saved_weights = f"./weights/dft_fixedcoeffs_{name}.pth"; saved_last_weights = f"./weights/dft_fixedcoeffs_last_{name}.pth"
 
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
