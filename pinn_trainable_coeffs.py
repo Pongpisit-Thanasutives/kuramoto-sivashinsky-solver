@@ -1,5 +1,5 @@
 # coding: utf-8
-import torch; device = torch.device("cpu")
+import torch; device = torch.device("cuda"); print(device)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
 
@@ -28,7 +28,7 @@ X_star, u_star = get_trainable_data(X, T, Exact)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 20000 # 20000, 30000, 60000
+N = 90000 # 20000, 30000, 60000
 print(f"Fine-tuning with {N} samples")
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -36,7 +36,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = True
 if noisy_xt: X_u_train = perturb(X_u_train, noise_intensity); print("Noisy (x, t)")
 else: print("Clean (x, t)")
 if noisy_labels: u_train = perturb(u_train, noise_intensity); print("Noisy labels")
@@ -50,8 +50,8 @@ u_star = to_tensor(u_star, False)
 
 # lb and ub are used in adversarial training
 scaling_factor = 1.0
-lb = scaling_factor*to_tensor(lb, False)
-ub = scaling_factor*to_tensor(ub, False)
+lb = scaling_factor*to_tensor(lb, False).to(device)
+ub = scaling_factor*to_tensor(ub, False).to(device)
 
 # Feature names, base on the symbolic regression results (only the important features)
 feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
@@ -76,12 +76,8 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 #     + (-1.006815 +0.000000i)u_{xx}
 #     + (-1.005177 +0.000000i)u_{xxxx}
 
-# program = '''
-# -0.97*u_xx-0.902*u_xxxx-0.920*uf*u_x
-# ''' 
-
 program = '''
--0.912049*u_xx-0.909050*u_xxxx-0.951584*uf*u_x
+-0.942656*u_xx-0.900600*u_xxxx-0.919862*uf*u_x
 '''
 
 pde_expr, variables = build_exp(program); print(pde_expr, variables)
@@ -200,12 +196,12 @@ class RobustPINN(nn.Module):
     def neural_net_scale(self, inp): 
         return -1.0+2.0*(inp-self.lb)/(self.ub-self.lb)
 
-noiseless_mode = True
+noiseless_mode = False
 model = TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1], bn=nn.LayerNorm, dropout=None)
 
 # Pretrained model
 load_fn = gpu_load
-if model.device == torch.device("cpu"):
+if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
 semisup_model_state_dict = load_fn("./weights/rudy_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
@@ -228,32 +224,6 @@ pinn = RobustPINN(model=model, loss_fn=mod,
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode)
 pinn = pinn.to(device)
-
-lets_pretrain = False
-
-if lets_pretrain:
-    xx, tt = X_u_train[:, 0:1], X_u_train[:, 1:2]
-
-    pretraining_optimizer = LBFGSNew(pinn.model.parameters(),
-                                     lr=1e-1, max_iter=500,
-                                     max_eval=int(500*1.25), history_size=300,
-                                     line_search_fn=True, batch_mode=False)
-
-    model.train()
-    for i in range(5): # 1, 5, 200
-        def pretraining_closure():
-            global xx, tt, u_train
-            if torch.is_grad_enabled(): pretraining_optimizer.zero_grad()
-            mse_loss = F.mse_loss(pinn(xx, tt), u_train)
-            if mse_loss.requires_grad: mse_loss.backward(retain_graph=False)
-            return mse_loss
-
-        pretraining_optimizer.step(pretraining_closure)
-
-        if (i%1)==0:
-            l = pretraining_closure()
-            curr_loss = l.item()
-            print("Epoch {}: ".format(i), curr_loss)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -285,7 +255,7 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 0, 20
+epochs1, epochs2 = 0, 50
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
 pinn.train(); best_train_loss = 1e6
@@ -306,10 +276,7 @@ for i in range(epochs2):
         l = closure()
         print("Epoch {}: ".format(i), l.item())
 
-pred_params = [pinn.param0.item(), pinn.param1.item(), pinn.param2.item()]
+pred_params = [pinn.param0, pinn.param1, pinn.param2]
 print(pred_params)
 
-errs = 100*np.abs(np.array(pred_params)+1)
-print(errs.mean(), errs.std())
-
-save(pinn, "./weights/xxx.pth")
+save(pinn, "./weights/dft_noisy1.pth")

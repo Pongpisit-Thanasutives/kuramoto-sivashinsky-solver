@@ -1,12 +1,16 @@
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 import pickle
 from sympy import Symbol, Integer, Float, Add, Mul, Lambda, simplify
 from sympy.parsing.sympy_parser import parse_expr
 from sympy.core import evaluate
 from sympytorch import SymPyModule
 import sympytorch
+
+def cat(*args):
+    return torch.cat(args, dim=-1)
 
 def cpu_load(a_path):
     return torch.load(a_path, map_location="cpu")
