@@ -36,7 +36,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = True
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: X_u_train = perturb(X_u_train, noise_intensity); print("Noisy (x, t)")
 else: print("Clean (x, t)")
 if noisy_labels: u_train = perturb(u_train, noise_intensity); print("Noisy labels")
@@ -56,8 +56,7 @@ ub = scaling_factor*to_tensor(ub, False).to(device)
 # Feature names, base on the symbolic regression results (only the important features)
 feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 
-# del X_star, u_star
-
+### 1-st results ###
 # Noisy (x, t) and noisy labels
 # PDE derived using STRidge to NN diff features
 # u_t = (-0.912049 +0.000000i)u_xx
@@ -76,9 +75,22 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 #     + (-1.006815 +0.000000i)u_{xx}
 #     + (-1.005177 +0.000000i)u_{xxxx}
 
-program = '''
--0.942656*u_xx-0.900600*u_xxxx-0.919862*uf*u_x
-'''
+program = None
+if state == 0:
+    program = [-1.0161751508712769, -0.9876205325126648, -0.9817131161689758]
+    program = f'''
+    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
+    '''
+elif state == 1:
+    program = [-0.9498964548110962, -0.9398553967475891, -1.0064408779144287]
+    program = f'''
+    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
+    '''
+elif state == 2:
+    program = [-1.025016188621521, -0.8882913589477539, -0.9990026354789734]
+    program = f'''
+    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
+    '''
 
 pde_expr, variables = build_exp(program); print(pde_expr, variables)
 mod = sympytorch.SymPyModule(expressions=[pde_expr]); mod.train()
@@ -108,9 +120,9 @@ class RobustPINN(nn.Module):
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
 
         # Be careful of the indexing you're using here. Need more systematic way of dealing with the parameters.
-        self.param0 = self.init_parameters[0]
-        self.param1 = self.init_parameters[1]
-        self.param2 = self.init_parameters[2]
+        self.param0 = float(self.init_parameters[0])
+        self.param1 = float(self.init_parameters[1])
+        self.param2 = float(self.init_parameters[2])
         print("Please check the following parameters.")
         print("Initial parameters", (self.param0, self.param1, self.param2))
         del self.callable_loss_fn, self.init_parameters
@@ -166,7 +178,7 @@ class RobustPINN(nn.Module):
         u_x = self.gradients(uf, x)[0]
         u_xx = self.gradients(u_x, x)[0]
         u_xxx = self.gradients(u_xx, x)[0]
-        u_xxxx = self.gradients(u_xxx, x)[0]        
+        u_xxxx = self.gradients(u_xxx, x)[0]
         return {"uf":uf, "u_x":u_x, "u_xx":u_xx, "u_xxxx":u_xxxx}, u_t
     
     def get_selector_data(self, x, t):
@@ -230,7 +242,7 @@ t_fft, t_PSD = t_fft.detach().to(device), t_PSD.detach().to(device)
 X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
-WWW = 1
+WWW = 1e-4
 
 def closure():
     if torch.is_grad_enabled():
@@ -250,10 +262,10 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 5, 50
+epochs1, epochs2 = 50, 50
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
-pinn.train(); best_train_loss = 1e6
+pinn.train(); best_loss = 1e6; saved_weights = "./weights/dft_fixedcoeffs_cleanall.pth"
 
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
@@ -262,7 +274,11 @@ for i in range(epochs1):
         l = mtl_closure()
         print("Epoch {}: ".format(i), l.item())
         print(pinn.param0, pinn.param1, pinn.param2)
-        print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
+        track = F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star).item()
+        print(track)
+        if track < best_loss:
+            best_loss = track
+            save(pinn, saved_weights)
         
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
@@ -271,9 +287,11 @@ for i in range(epochs2):
     if (i % 5) == 0 or i == epochs2-1:
         l = closure()
         print("Epoch {}: ".format(i), l.item())
-        print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
+        track = F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star).item()
+        print(track)
+        if track < best_loss:
+            best_loss = track
+            save(pinn, saved_weights)
 
 pred_params = [pinn.param0, pinn.param1, pinn.param2]
 print(pred_params)
-
-save(pinn, "./weights/dft_noisy1.pth")
