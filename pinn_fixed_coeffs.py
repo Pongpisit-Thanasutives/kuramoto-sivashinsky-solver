@@ -95,6 +95,7 @@ elif state == 2:
     '''
     name = "noisy2"
 
+print("name =", name)
 pde_expr, variables = build_exp(program); print(pde_expr, variables)
 mod = sympytorch.SymPyModule(expressions=[pde_expr]); mod.train()
 
