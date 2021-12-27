@@ -28,7 +28,7 @@ X_star, u_star = get_trainable_data(X, T, Exact)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 20000 # 20000, 30000, 60000
+N = 100000 # 20000, 30000, 60000
 print(f"Fine-tuning with {N} samples")
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -45,7 +45,7 @@ else: print("Clean labels")
 # Convert to torch.tensor
 X_u_train = to_tensor(X_u_train, True)
 u_train = to_tensor(u_train, False)
-X_star = to_tensor(X_star, True)
+X_star = to_tensor(X_star, True).to(device)
 u_star = to_tensor(u_star, False)
 
 # lb and ub are used in adversarial training
@@ -262,10 +262,10 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 50, 50
+epochs1, epochs2 = 1000, 50
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
-pinn.train(); best_loss = 1e6; saved_weights = "./weights/dft_fixedcoeffs_cleanall.pth"
+pinn.train(); best_loss = 1e6; saved_weights = "./weights/dft_fixedcoeffs_cleanall.pth"; saved_last_weights = "./weights/dft_fixedcoeffs_last_cleanall.pth"
 
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
@@ -295,3 +295,4 @@ for i in range(epochs2):
 
 pred_params = [pinn.param0, pinn.param1, pinn.param2]
 print(pred_params)
+save(pinn, saved_last_weights)

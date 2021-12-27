@@ -262,7 +262,7 @@ for i in range(epochs1):
         l = mtl_closure()
         print("Epoch {}: ".format(i), l.item())
         print(pinn.param0, pinn.param1, pinn.param2)
-        print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
+        # print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
         
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
@@ -271,7 +271,7 @@ for i in range(epochs2):
     if (i % 5) == 0 or i == epochs2-1:
         l = closure()
         print("Epoch {}: ".format(i), l.item())
-        print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
+        # print(F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star))
 
 pred_params = [pinn.param0, pinn.param1, pinn.param2]
 print(pred_params)
