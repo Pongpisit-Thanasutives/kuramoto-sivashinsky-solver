@@ -37,7 +37,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: X_u_train = perturb(X_u_train, noise_intensity); print("Noisy (x, t)")
 else: print("Clean (x, t)")
 if noisy_labels: u_train = perturb(u_train, noise_intensity); print("Noisy labels")
