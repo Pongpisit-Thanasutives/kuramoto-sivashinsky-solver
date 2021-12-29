@@ -1,7 +1,9 @@
 import numpy as np
+from numpy import linalg
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.autograd import Variable, grad
 import pickle
 from sympy import Symbol, Integer, Float, Add, Mul, Lambda, simplify
 from sympy.parsing.sympy_parser import parse_expr
@@ -54,8 +56,12 @@ def diff_flag(index2feature):
         else: dd[1].append(diff_order(t))
     return dd
 
-def diff(func, inp):
-    return grad(func, inp, create_graph=True, retain_graph=True, grad_outputs=torch.ones(func.shape, dtype=func.dtype))[0]
+def diff(func, inp, device):
+    return grad(func, inp, create_graph=True, retain_graph=True, grad_outputs=torch.ones(func.shape, dtype=func.dtype).to(device))[0]
+
+def complex_diff(func, inp, device, return_complex=True):
+    if return_complex: return diff(func.real, inp, device)+1j*diff(func.imag, inp, device)
+    else: return cat(diff(func.real, inp), diff(func.imag, inp))
 
 def gradients_dict(u, x, t, feature_names):
     grads_dict = {}
@@ -75,6 +81,20 @@ def gradients_dict(u, x, t, feature_names):
 def save(a_model, path):
     return torch.save(a_model.state_dict(), path)
 
+def load_weights(a_model, a_path, mode="cpu"):
+    if mode=="cpu": sd = cpu_load(a_path)
+    elif mode=="gpu": sd = gpu_load(a_path)
+    try:
+        a_model.load_state_dict(sd, strict=True)
+        print("Loaded the model's weights properly")
+    except: 
+        try: 
+            a_model.load_state_dict(sd, strict=False)
+            print("Loaded the model's weights with strict=False")
+        except:
+            print("Cannot load the model' weights properly.")
+    return a_model
+
 def is_nan(a_tensor):
     return torch.isnan(a_tensor).any().item()
 
@@ -89,6 +109,9 @@ def to_complex_tensor(arr, g=True):
 
 def to_numpy(a_tensor):
     return a_tensor.detach().numpy()
+
+def relative_l2_error(sig, ground):
+    return linalg.norm((sig-ground), 2)/linalg.norm(ground, 2)
 
 def perturb(a_array, intensity=0.01, noise_type="normal", overwrite=True):
     if intensity <= 0.0: return a_array
@@ -107,6 +130,12 @@ def perturb(a_array, intensity=0.01, noise_type="normal", overwrite=True):
         noise = 0.0
     if overwrite: return a_array + noise
     else: return noise
+
+# This function assumes that each dimension (variable) is independent from each other.
+def perturb2d(a_array, intensity):
+    for i in range(a_array.shape[1]):
+        a_array[:, i:i+1] = perturb(a_array[:, i:i+1], intensity=intensity)
+    return a_array
 
 def build_exp(program, trainable_one=True):
     x = Symbol("x"); y = Symbol("y")
