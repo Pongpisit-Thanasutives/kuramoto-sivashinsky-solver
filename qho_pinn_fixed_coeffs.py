@@ -352,11 +352,8 @@ X_train, h_train = (X_train).to(device), (h_train).to(device)
 x_fft, x_PSD = (x_fft).to(device), (x_PSD).to(device)
 t_fft, t_PSD = (t_fft).to(device), (t_PSD).to(device)
 h_train_fft, h_train_PSD = (h_train_fft).to(device), (h_train_PSD).to(device)
+
 epochs1, epochs2 = 0, 100
-
-
-
-
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
@@ -374,31 +371,12 @@ for i in range(epochs2):
         print(errs.mean(), errs.std())
 
 
-
 X_star, h_star = X_star.to(device), h_star.to(device)
-
-
-
-
 print(complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
 
-
-
-
 true_norm = torch.sqrt(h_star.real**2 + h_star.imag**2).detach().cpu().numpy()
-
-
-
-
 pred_norm = pinn(X_star[:, 0:1], X_star[:, 1:2])
 pred_norm = torch.sqrt(pred_norm.real**2 + pred_norm.imag**2).detach().cpu().numpy()
-
-
-
-
 print(relative_l2_error(true_norm, pred_norm))
-
-
-
 
 save(pinn, f"./qho_weights/{name}_161x512_dft_pinn (fixed).pth")
