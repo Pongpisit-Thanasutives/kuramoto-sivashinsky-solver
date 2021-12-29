@@ -43,13 +43,7 @@ potential = np.vstack([0.5*np.power(x,2).reshape((1,spatial_dim)) for _ in range
 X, T = np.meshgrid(x, t)
 Exact = data['usol'][:tlimit, :xlimit]
 
-
-
-
 def fn(e): return e.flatten()[:, None]
-
-
-
 
 Exact_u = np.real(Exact)
 Exact_v = np.imag(Exact)
@@ -63,9 +57,10 @@ potential = fn(potential)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 20000
+N = 100000
+N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-# idx = np.arange(N) # Just have an easy dataset for experimenting
+print("Training with", N, "samples...")
 
 lb = to_tensor(lb, False).to(device)
 ub = to_tensor(ub, False).to(device)
@@ -78,7 +73,7 @@ V = potential[idx, :]
 
 # adding noise
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 if noisy_labels:
     u_train = perturb(u_train, noise_intensity)
     v_train = perturb(v_train, noise_intensity)
@@ -165,9 +160,6 @@ program2 = "X1"
 pde_expr2, variables2 = build_exp(program2); print(pde_expr2, variables2)
 
 mod = ComplexSymPyModule(expressions=[pde_expr1, pde_expr2], complex_coeffs=cns); mod.train()
-
-
-
 
 class PDEExpression(nn.Module):
     def __init__(self, terms, values, symbolic_module=True):
@@ -306,8 +298,6 @@ complex_model = torch.nn.Sequential(
                                     )
 
 
-
-
 # Pretrained model
 semisup_model_state_dict = cpu_load("./qho_weights/clean_all_161x512_pretrained_semisup_model.pth")
 parameters = OrderedDict()
@@ -322,15 +312,10 @@ complex_model.load_state_dict(parameters)
 pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_names, 
                    scale=True, lb=lb, ub=ub).to(device)
 
-
-
 pinn.param0_real.requires_grad_(False)
 pinn.param0_imag.requires_grad_(False)
 pinn.param1_real.requires_grad_(False)
 pinn.param1_imag.requires_grad_(False)
-
-
-
 
 denoise = True
 pure_imag = (mode == 0)
@@ -346,8 +331,6 @@ def closure():
     if l.requires_grad: l.backward(retain_graph=True)
     return l
 
-
-
 X_train, h_train = (X_train).to(device), (h_train).to(device)
 x_fft, x_PSD = (x_fft).to(device), (x_PSD).to(device)
 t_fft, t_PSD = (t_fft).to(device), (t_PSD).to(device)
@@ -361,22 +344,13 @@ for i in range(epochs2):
     l = closure()
     if (i % 5) == 0 or i == epochs2-1:
         print("Epoch {}: ".format(i), l.item())
-        p1 = torch.complex(pinn.param0_real, pinn.param0_imag).detach().numpy()
-        p2 = torch.complex(pinn.param1_real, pinn.param1_imag).detach().numpy()
-        print(p1)
-        print(p2)
-        e1 = p1+1j
-        e2 = p2-0.5j
-        errs = np.abs(npar([100*(np.abs(e1.real)+1j*np.abs(e1.imag))[0], 200*(np.abs(e2.real)+1j*np.abs(e2.imag))[0]]))
-        print(errs.mean(), errs.std())
 
+save(pinn, f"./qho_weights/{name}_161x512_dft_pinn_fixed.pth")
 
 X_star, h_star = X_star.to(device), h_star.to(device)
-print(complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
+print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
 
 true_norm = torch.sqrt(h_star.real**2 + h_star.imag**2).detach().cpu().numpy()
 pred_norm = pinn(X_star[:, 0:1], X_star[:, 1:2])
 pred_norm = torch.sqrt(pred_norm.real**2 + pred_norm.imag**2).detach().cpu().numpy()
-print(relative_l2_error(true_norm, pred_norm))
-
-save(pinn, f"./qho_weights/{name}_161x512_dft_pinn (fixed).pth")
+print("Test relative l2 error:", relative_l2_error(true_norm, pred_norm))
