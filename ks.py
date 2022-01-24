@@ -24,29 +24,32 @@ def to_tensor(arr, g=True):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print("Using", device)
 
-data = loadmat(DATA_PATH)
+# data = loadmat(DATA_PATH)
 
-t = data['tt'].flatten()[:,None]
-x = data['x'].flatten()[:,None]
-Exact = np.real(data['uu'])
-T_sol, X_sol = np.meshgrid(t, x)
+# t = data['tt'].flatten()[:,None]
+# x = data['x'].flatten()[:,None]
+# Exact = np.real(data['uu'])
+# T_sol, X_sol = np.meshgrid(t, x)
 
-if (X_sol.shape == T_sol.shape == Exact.shape): print("Shapes OK!")
-else: print("Shapes NOT OK!")
+# if (X_sol.shape == T_sol.shape == Exact.shape): print("Shapes OK!")
+# else: print("Shapes NOT OK!")
 
-x_star = X_sol.flatten()[:,None]
-t_star = T_sol.flatten()[:,None]
+# x_star = X_sol.flatten()[:,None]
+# t_star = T_sol.flatten()[:,None]
 
-X_star = np.hstack((x_star, t_star))
-u_star = Exact.flatten()[:,None]
+# X_star = np.hstack((x_star, t_star))
+# u_star = Exact.flatten()[:,None]
+
+X_sol, T_sol, Exact = space_time_grid(data_path=DATA_PATH, real_solution=True)
+X_star, u_star = get_trainable_data(X_sol, T_sol, Exact)
 
 # Bound
 ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-N = 1024*30
-# N = 100000
+N = 1024*101
+# N = 100
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -256,4 +259,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst100000labeledsamples_trained0unlabeledsamples.pth")
