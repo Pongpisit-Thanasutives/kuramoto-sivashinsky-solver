@@ -46,13 +46,24 @@ lb = X_star.min(axis=0)
 
 # For identification
 # N = 60000
-N = 75000
+N = 100000
 
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 X_train = X_star[idx,:]
 u_train = u_star[idx,:]
-
 print("Training with", N, "samples")
+
+noise_intensity_xt = 0.01/np.sqrt(2)
+noise_intensity_labels = 0.01
+noisy_xt = True; noisy_labels = True
+if noisy_xt and noise_intensity_xt > 0.0:
+    print("Noisy X_train")
+    X_train = perturb2d(X_train, noise_intensity_xt)
+else: print("Clean X_train")
+if noisy_labels and noise_intensity_labels > 0.0:
+    print("Noisy u_train")
+    u_train = perturb(u_train, noise_intensity_labels)
+else: print("Clean u_train")
 
 # Unsup data
 include_N_res = False
@@ -240,4 +251,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/rudy_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
