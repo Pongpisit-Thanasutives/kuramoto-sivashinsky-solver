@@ -188,9 +188,8 @@ class SemiSupModel(nn.Module):
         return self.network.uf, unsup_loss
 
 ### Version with normalized derivatives ###
-use_pretrained_weights = False
-lets_pretrain = not use_pretrained_weights
-
+lets_pretrain = True
+pretrained_weights = "./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth"
 semisup_model = SemiSupModel(network=Network(
                                     model=TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1],
                                                    # activation_function=nn.Tanh(),
@@ -199,7 +198,12 @@ semisup_model = SemiSupModel(network=Network(
                             selector=AttentionSelectorNetwork([len(feature_names), 50, 50, 1], prob_activation=nn.Softmax(dim=1), bn=nn.LayerNorm),
                             normalize_derivative_features=True,
                             mini=None,
-                            maxi=None).to(device)
+                            maxi=None)
+if pretrained_weights is not None:
+    print("Loaded pretrained_weights")
+    semisup_model = load_weights(semisup_model, pretrained_weights)
+
+semisup_model = semisup_model.to(device)
 
 if lets_pretrain:
     print("Pretraining")
