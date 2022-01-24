@@ -48,7 +48,8 @@ lb = X_star.min(axis=0)
 N = 30000
 # N = 100000
 
-idx = np.random.choice(X_star.shape[0], N, replace=False)
+# idx = np.random.choice(X_star.shape[0], N, replace=False)
+idx = np.arange(N)
 X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
@@ -214,7 +215,7 @@ if lets_pretrain:
     
     best_state_dict = None; curr_loss = 1000
     semisup_model.network.train()
-    for i in range(120):
+    for i in range(300):
         def pretraining_closure():
             global N, X_u_train, u_train
             if torch.is_grad_enabled():
@@ -255,4 +256,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples.pth")
