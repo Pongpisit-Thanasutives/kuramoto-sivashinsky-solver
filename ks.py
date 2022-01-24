@@ -45,7 +45,7 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-N = 1024*101
+N = 1024*30
 # N = 100000
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -256,4 +256,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst100000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples.pth")
