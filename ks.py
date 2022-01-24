@@ -205,7 +205,7 @@ if pretrained_weights is not None:
     semisup_model = load_weights(semisup_model, pretrained_weights)
 
 semisup_model = semisup_model.to(device)
-
+print(F.mse_loss(semisup_model.network(*dimension_slicing(X_star)).detach(), u_star).item())
 if lets_pretrain:
     print("Pretraining")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(), 
