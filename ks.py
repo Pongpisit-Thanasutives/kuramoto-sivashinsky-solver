@@ -218,7 +218,7 @@ if lets_pretrain:
     
     best_state_dict = None; curr_loss = 1000
     semisup_model.network.train()
-    for i in range(1):
+    for i in range(120):
         def pretraining_closure():
             global N, X_u_train, u_train
             if torch.is_grad_enabled():
