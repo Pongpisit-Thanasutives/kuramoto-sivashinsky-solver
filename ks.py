@@ -59,7 +59,7 @@ print("Training with", N, "samples")
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = True
 if noisy_xt and noise_intensity_xt > 0.0:
     print("Noisy X_train")
     X_train = perturb2d(X_train, noise_intensity_xt)
@@ -259,4 +259,4 @@ if lets_pretrain:
     # semisup_model.maxi = tmp.max(axis=0)[0].requires_grad_(False)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples.pth")
+torch.save(semisup_model.state_dict(), "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples.pth")
