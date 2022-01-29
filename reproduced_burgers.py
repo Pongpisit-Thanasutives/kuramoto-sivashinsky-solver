@@ -95,7 +95,7 @@ class Network(nn.Module):
         return l_eq + mse
     
     def gradients(self, func, x):
-        return grad(func, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones(func.shape))
+        return grad(func, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones(func.shape).to(device))
 
 
 # In[ ]:
