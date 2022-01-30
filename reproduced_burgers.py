@@ -31,7 +31,7 @@ print("Using", device)
 # In[ ]:
 
 
-data = io.loadmat('./data/burgers.mat')
+data = io.loadmat('./data/burgers_shock.mat')
 
 N = 10000
 
@@ -53,7 +53,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-X_u_train = perturb2d(X_u_train, noise_intensity)
+# X_u_train = perturb2d(X_u_train, noise_intensity)
 u_train = perturb(u_train, noise_intensity)
 
 
@@ -129,7 +129,7 @@ optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_ev
 epochs = 600
 network.train()
 # weights_path = None
-weights_path = './burgers_weights/reproduced_pinn_noisy2.pth'
+weights_path = './burgers_weights/reproduced_pinn_noisy1.pth'
 
 for i in range(epochs):    
     ### Add the closure function to calculate the gradient. For LBFGS.
@@ -189,7 +189,7 @@ print(nu, torch.exp(network.lambda_2).cpu().detach().item())
 # In[ ]:
 
 
-errs = 100*np.array([np.abs(1.0-network.lambda_1.detach().item()), np.abs(nu-torch.exp(network.lambda_2).detach().item())/nu])
+errs = 100*np.array([np.abs(1.0-network.lambda_1.cpu().detach().item()), np.abs(nu-torch.exp(network.lambda_2).cpu().detach().item())/nu])
 
 
 print(errs.mean(), errs.std())
