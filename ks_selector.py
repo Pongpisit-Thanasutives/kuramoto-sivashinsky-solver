@@ -244,7 +244,7 @@ optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
 optimizer.param_groups[1]['lr'] = 5e-3
 
 # Use ~idx to sample adversarial data points
-for i in range(1000):
+for i in range(900):
     semisup_model.train()
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
