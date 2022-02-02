@@ -161,7 +161,7 @@ class AttentionSelectorNetwork(nn.Module):
         self.th = (1/layers[0])-(1e-10)
         self.reg_intensity = reg_intensity
 #         self.w = (0.1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 3.0])
-        self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 10.0, 1.0])
+        self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 10.0, 1.0]).to(device)
         self.al = ApproxL0(sig=1.0)
         self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
@@ -218,36 +218,24 @@ semisup_model = SemiSupModel(network=Network(
 if pretrained_weights is not None:
     print("Loaded pretrained_weights")
     semisup_model = load_weights(semisup_model, pretrained_weights)
-    referenced_derivatives, u_t = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
-    semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
-    semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
 
 semisup_model = semisup_model.to(device)
 
+if pretrained_weights is not None:
+    referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
+    semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+    semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+    del referenced_derivatives
+
 def pcgrad_closure(return_list=False):
     global N, X_train, u_train
-    predictions, unsup_loss = semisup_model(X_train)
-    losses = [F.mse_loss(predictions[:N, :], u_train[:N, :]), unsup_loss]
-    updated_grads = []
-    
-    for i in range(2):
+    if torch.is_grad_enabled():
         optimizer.zero_grad()
-        losses[i].backward(retain_graph=True)
-
-        g_task = []
-        for param in semisup_model.parameters():
-            if param.grad is not None:
-                g_task.append(Variable(param.grad.clone(), requires_grad=False))
-            else:
-                g_task.append(Variable(torch.zeros(param.shape), requires_grad=False))
-        # appending the gradients from each task
-        updated_grads.append(g_task)
-
-    updated_grads = list(pcgrad.pc_grad_update(updated_grads))[0]
-    for idx, param in enumerate(semisup_model.parameters()):
-        param.grad = (updated_grads[0][idx]+updated_grads[1][idx])
-        
-    if not return_list: return sum(losses)
+    predictions, unsup_loss = semisup_model(X_train)
+    losses = [F.mse_loss(predictions[:N, :], u_train[:N, :]), 0.1*unsup_loss]
+    loss = sum(losses)
+    if loss.requires_grad: loss.backward(retain_graph=True)
+    if not return_list: return loss
     else: return losses
 
 # Joint training
@@ -256,7 +244,7 @@ optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
 optimizer.param_groups[1]['lr'] = 5e-3
 
 # Use ~idx to sample adversarial data points
-for i in range(100):
+for i in range(1000):
     semisup_model.train()
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
@@ -281,7 +269,7 @@ if lets_pretrain:
     
     best_state_dict = None; curr_loss = 1000
     semisup_model.network.train()
-    for i in range(10):
+    for i in range(1):
         def pretraining_closure():
             global N, X_train, u_train
             if torch.is_grad_enabled():
@@ -313,4 +301,4 @@ if lets_pretrain:
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-3.pth")
+torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-3_ep1.pth")
