@@ -147,7 +147,7 @@ class Network(nn.Module):
         return 2*(inp-self.lb)/(self.ub-self.lb)-1
 
 class AttentionSelectorNetwork(nn.Module):
-    def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=1e-4):
+    def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=1e-6):
         super(AttentionSelectorNetwork, self).__init__()
         # Nonlinear model, Training with PDE reg.
         assert len(layers) > 1
@@ -245,7 +245,7 @@ optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
 optimizer.param_groups[1]['lr'] = 5e-3
 
 # Use ~idx to sample adversarial data points
-for i in range(1000):
+for i in range(900):
     semisup_model.train()
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
@@ -302,4 +302,4 @@ if lets_pretrain:
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-4_ep1_V2.pth")
+torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-6_ep1_V2.pth")
