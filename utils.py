@@ -278,3 +278,18 @@ class FFTTh(nn.Module):
         d[indices>0] = indices[indices>0]
         indices = indices / d
         return indices
+
+class ApproxL0(nn.Module):
+    def __init__(self, sig=1.0, minmax=(0.0, 10.0), trainable=True):
+        super(ApproxL0, self).__init__()
+        self.sig = nn.Parameter(data=torch.FloatTensor([float(sig)])).requires_grad_(trainable)
+        self.mini = minmax[0]
+        self.maxi = minmax[1]
+
+    def forward(self, w):
+        sig = torch.clamp(self.sig, min=self.mini, max=self.maxi)
+        return approx_l0(w, sig=sig)
+
+def approx_l0(w, sig=1.0):
+    sig = sig*torch.var(w)
+    return len(w)-torch.exp(torch.div(-torch.square(w), 2*(torch.square(sig)))).sum()

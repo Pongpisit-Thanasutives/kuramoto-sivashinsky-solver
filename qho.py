@@ -193,6 +193,7 @@ class ComplexAttentionSelectorNetwork(nn.Module):
         self.latest_weighted_features = None
         self.th = (1/layers[0])+(1e-10)
         self.reg_intensity = reg_intensity
+        self.al = ApproxL0(sig=1.0)
         # 1e0 = 1
         # self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 1.0])
         # 1e-2, 1e-4
@@ -216,7 +217,7 @@ class ComplexAttentionSelectorNetwork(nn.Module):
         ut_approx = self.forward(X_input)
         l1 = complex_mse(ut_approx, y_input)
         reg_term = F.relu(self.latest_weighted_features-self.th)
-        l2 = torch.norm(reg_term, p=0)+torch.dot(self.w, reg_term)
+        l2 = self.al(reg_term)+torch.dot(self.w, reg_term)
         return l1 + self.reg_intensity*l2
 
 # Only the SemiSupModel has changed to work with the finite difference guidance
