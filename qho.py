@@ -62,7 +62,7 @@ v_star = to_column_vector(Exact_v)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 10000; include_N_res = 1
+N = X_star.shape[0]//2; include_N_res = 0.5
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 # idx = np.arange(N) # Just have an easy dataset for experimenting
 print(f"Training with {N} labeled samples")
@@ -86,7 +86,7 @@ h_train = torch.complex(u_train, v_train)
 # Unsup data
 if include_N_res>0:
     N_res = int(N*include_N_res)
-    idx_res = np.array(range(X_star.shape[0]-1))[~idx]
+    idx_res = np.array(range(X_star.shape[0]))[~idx]
     idx_res = idx_res[:N_res]
     X_res = to_tensor(X_star[idx_res, :], True)
     print(f"Training with {N_res} unsup samples")
@@ -121,7 +121,7 @@ derivatives = cat_numpy(h_star.detach().numpy(), V, fd_h_x, fd_h_xx, fd_h_xxx)
 dictionary = {}
 for i in range(len(feature_names)): dictionary[feature_names[i]] = get_feature(derivatives, i)
 
-# PRETRAINED_PATH = "./qho_weights/pretrained_cpinn_2000labeledsamples.pth"
+PRETRAINED_PATH = "./qho_weights/pretrained_cpinn_2000labeledsamples.pth"
 PRETRAINED_PATH = None
 
 inp_dimension = 2
@@ -181,7 +181,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1 + 2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1e-2
+REG_INTENSITY = 1e-3
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -254,8 +254,8 @@ semisup_model = SemiSupModel(
     network=ComplexNetwork(model=complex_model, index2features=feature_names, scale=True, lb=lb, ub=ub),
     selector=ComplexAttentionSelectorNetwork([len(feature_names), 50, 50, 1], prob_activation=TanhProb(), bn=True),
     normalize_derivative_features=True,
-    mini=torch.tensor(np.abs(derivatives).min(axis=0), dtype=torch.cfloat),
-    maxi=torch.tensor(np.abs(derivatives).max(axis=0), dtype=torch.cfloat),
+    mini=torch.tensor(np.abs(derivatives).min(axis=0), dtype=torch.cfloat).to(device),
+    maxi=torch.tensor(np.abs(derivatives).max(axis=0), dtype=torch.cfloat).to(device),
     uncert=False,
 ).to(device)
 
@@ -296,19 +296,21 @@ if lets_pretrain:
 
 def pcgrad_closure(return_list=False):
     global N, X_train, h_train
+    if torch.is_grad_enabled():
+        optimizer.zero_grad()
     fd_guidance, unsup_loss = semisup_model(X_train, h_train, include_unsup=True)
-    losses = [fd_guidance, (1e-2)*unsup_loss]
-    loss = sum(losses)
-    loss.backward(retain_graph=True)
+    loss = fd_guidance + (1e-2)*unsup_loss
+    if loss.requires_grad:
+        loss.backward(retain_graph=True)
     if not return_list: return loss
-    else: return losses
+    else: return fd_guidance, unsup_loss
 
 save(semisup_model, f"./qho_weights/pretrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
 
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7
-optimizer.param_groups[1]['lr'] = 0.1
+optimizer.param_groups[1]['lr'] = 1e-2
 
 # Use ~idx to sample adversarial data points
 for i in range(500):
@@ -316,7 +318,7 @@ for i in range(500):
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
     if i == 0:
-        semisup_model.selector.th = 0.95*semisup_model.selector.latest_weighted_features.min().item()
+        semisup_model.selector.th = 0.90*semisup_model.selector.latest_weighted_features.min().item()
         print(semisup_model.selector.th)
     if i%25==0:
         print(semisup_model.selector.latest_weighted_features.cpu().detach().numpy())
