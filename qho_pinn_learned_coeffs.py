@@ -71,7 +71,7 @@ V = potential[idx, :]
 
 # adding noise
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
 if noisy_labels:
     u_train = perturb(u_train, noise_intensity)
     v_train = perturb(v_train, noise_intensity)
@@ -129,22 +129,19 @@ del noise_x, noise_t
 mode = int(noisy_xt)+int(noisy_labels)
 
 if mode == 0:
-    cn1 = (-0.00255341-1.0000252*1j)
-    cn2 = (-0.0003066+0.4989754*1j)
+    cn1 = (-0.002272 -0.999772*1j)
+    cn2 = (-0.000547 +0.499581*1j)
     name = "cleanall"
 elif mode == 1:
-    cn1 = (-0.01853757-0.931975*1j)
-    cn2 = (-0.01092263+0.47892907*1j)
+    cn1 = (-0.002839 -0.998631*1j)
+    cn2 = (-0.000211+0.499448*1j)
     name = "noisy1"
 elif mode == 2:
-    cn1 = (-0.01606621-0.9476085*1j)
-    cn2 = (-0.04285275+0.48442504*1j)
+    cn1 = (-0.002149 -0.996097*1j)
+    cn2 = (-0.000531 +0.497700*1j)
     name = "noisy2"
     
 cns = [cn1, cn2]
-
-
-
 
 # Type the equation got from the symbolic regression step
 # No need to save the eq save a pickle file before
@@ -177,7 +174,7 @@ class PDEExpression(nn.Module):
 mod = PDEExpression(["hf*V", "h_xx"], cns, False)
 
 class ComplexPINN(nn.Module):
-    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, init_cs=(-0.05, -0.05), init_betas=(0.0, 0.0)):
+    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, init_cs=(0.01, 0.01), init_betas=(0.0, 0.0)):
         super(ComplexPINN, self).__init__()
         self.model = model
         
@@ -190,8 +187,10 @@ class ComplexPINN(nn.Module):
         self.param1_imag = nn.Parameter(torch.FloatTensor([self.initial_param1.imag]))
         
         global N
-        self.in_fft_nn = FFTTh(c=init_cs[0], func=lambda x: (torch.exp(-F.relu(x))))
-        self.out_fft_nn = FFTTh(c=init_cs[1], func=lambda x: (torch.exp(-F.relu(x))))
+        # self.in_fft_nn = FFTTh(c=init_cs[0], func=lambda x: (torch.exp(-F.relu(x))))
+        # self.out_fft_nn = FFTTh(c=init_cs[1], func=lambda x: (torch.exp(-F.relu(x))))
+        self.in_fft_nn = FFTTh(c=init_cs[0])
+        self.out_fft_nn = FFTTh(c=init_cs[1])
         # Beta-Robust PCA
         self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
         self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
@@ -291,7 +290,7 @@ complex_model = torch.nn.Sequential(
 
 
 # Pretrained model
-semisup_model_state_dict = cpu_load("./qho_weights/clean_all_161x512_pretrained_semisup_model.pth")
+semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_noisy2_semisup_model_lambda1_0.03.pth")
 parameters = OrderedDict()
 
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
@@ -304,10 +303,10 @@ complex_model.load_state_dict(parameters)
 pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_names, 
                    scale=True, lb=lb, ub=ub).to(device)
 
-pinn.param0_real.requires_grad_(False)
-pinn.param0_imag.requires_grad_(False)
-pinn.param1_real.requires_grad_(False)
-pinn.param1_imag.requires_grad_(False)
+pinn.param0_real.requires_grad_(True)
+pinn.param0_imag.requires_grad_(True)
+pinn.param1_real.requires_grad_(True)
+pinn.param1_imag.requires_grad_(True)
 
 denoise = True
 pure_imag = (mode == 0)
@@ -337,7 +336,12 @@ for i in range(epochs2):
     if (i % 5) == 0 or i == epochs2-1:
         print("Epoch {}: ".format(i), l.item())
 
-save(pinn, f"./qho_weights/{name}_161x512_dft_pinn_fixed.pth")
+print(pinn.param0_real)
+print(pinn.param0_imag)
+print(pinn.param1_real)
+print(pinn.param1_imag)
+
+save(pinn, f"./qho_weights/{name}_161x512_dft_pinn_learned.pth")
 
 X_star, h_star = X_star.to(device), h_star.to(device)
 print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
