@@ -62,7 +62,7 @@ v_star = to_column_vector(Exact_v)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = X_star.shape[0]//2; include_N_res = 0.5
+N = 30000; include_N_res = 0.5
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 # idx = np.arange(N) # Just have an easy dataset for experimenting
 print(f"Training with {N} labeled samples")
@@ -181,7 +181,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1 + 2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1e-3
+REG_INTENSITY = 2e-3
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -197,7 +197,7 @@ class ComplexAttentionSelectorNetwork(nn.Module):
         # 1e0 = 1
         # self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 1.0])
         # 1e-2, 1e-4
-        self.w = torch.tensor([1.0, 3.0, 2.0, 3.0, 1.0]).to(device)
+        self.w = torch.tensor([1.0, 3.0, 2.0, 4.0, 1.0]).to(device)
         # self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
     def xavier_init(self, m):
@@ -311,7 +311,7 @@ save(semisup_model, f"./qho_weights/pretrained_semisup_model_lambda1_{REG_INTENS
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7
-optimizer.param_groups[1]['lr'] = 1e-2
+optimizer.param_groups[1]['lr'] = 5e-2
 
 # Use ~idx to sample adversarial data points
 for i in range(500):
@@ -319,7 +319,7 @@ for i in range(500):
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
     if i == 0:
-        semisup_model.selector.th = 0.90*semisup_model.selector.latest_weighted_features.min().item()
+        semisup_model.selector.th = 0.9*semisup_model.selector.latest_weighted_features.min().item()
         print(semisup_model.selector.th)
     if i%25==0:
         print(semisup_model.selector.latest_weighted_features.cpu().detach().numpy())
@@ -347,6 +347,7 @@ for i in range(50):
 feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
 old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
 feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
+print(semisup_model.selector.th)
 print(feature_importance)
 
 save(semisup_model, f"./qho_weights/jointtrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
