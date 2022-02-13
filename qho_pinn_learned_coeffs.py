@@ -55,7 +55,7 @@ potential = fn(potential)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 100000
+N = 10000 # N = X_star.shape[0] 
 N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 print("Training with", N, "samples...")
@@ -70,8 +70,14 @@ v_train = np.imag(h_train)
 V = potential[idx, :]
 
 # adding noise
+denoise = False
+if denoise:
+    modelname = "dft"
+else:
+    modelname = "nodft"
+print(modelname)
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = True
 if noisy_labels:
     u_train = perturb(u_train, noise_intensity)
     v_train = perturb(v_train, noise_intensity)
@@ -94,9 +100,6 @@ h_train = torch.tensor(h_train, dtype=torch.cfloat, requires_grad=False)
 V = to_tensor(V, False).to(device)
 
 feature_names = ['hf', 'h_xx', 'V']
-
-
-
 
 noise_x, x_fft, x_PSD = fft1d_denoise(to_tensor(X_train[:, 0:1]), c=-0.05, return_real=True)
 noise_x = X_train[:, 0:1] - noise_x
@@ -265,9 +268,6 @@ class ComplexPINN(nn.Module):
     def neural_net_scale(self, inp): 
         return 2*(inp-self.lb)/(self.ub-self.lb)-1
 
-
-
-
 inp_dimension = 2
 act = CplxToCplx[torch.tanh]
 complex_model = CplxSequential(
@@ -290,9 +290,14 @@ complex_model = torch.nn.Sequential(
 
 
 # Pretrained model
-semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_noisy2_semisup_model_lambda1_0.03.pth")
-parameters = OrderedDict()
+if mode == 2:
+    semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_noisy2_semisup_model_lambda1_0.03.pth")
+elif mode == 1:
+    semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_noisy1_semisup_model_lambda1_0.03.pth")
+elif mode == 0:
+    semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_semisup_model_lambda1_0.03_work.pth")
 
+parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
 for p in semisup_model_state_dict:
@@ -308,8 +313,8 @@ pinn.param0_imag.requires_grad_(True)
 pinn.param1_real.requires_grad_(True)
 pinn.param1_imag.requires_grad_(True)
 
-denoise = True
-pure_imag = (mode == 0)
+# pure_imag = (mode == 0)
+pure_imag = False
 update_pde_params = True
 
 def closure():
@@ -341,7 +346,7 @@ print(pinn.param0_imag)
 print(pinn.param1_real)
 print(pinn.param1_imag)
 
-save(pinn, f"./qho_weights/{name}_161x512_dft_pinn_learned.pth")
+save(pinn, f"./qho_weights/{name}_161x512_{modelname}_pinn_learned.pth")
 
 X_star, h_star = X_star.to(device), h_star.to(device)
 print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
