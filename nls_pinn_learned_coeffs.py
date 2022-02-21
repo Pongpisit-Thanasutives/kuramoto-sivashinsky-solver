@@ -26,7 +26,7 @@ print("You're running on", device)
 # Adding noise
 noise_intensity = 0.01/np.sqrt(2)
 noisy_xt = True; noisy_labels = True
-DENOISE = False
+DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -50,7 +50,7 @@ v_star = to_column_vector(Exact_v.T)
 
 N = 5000
 N = min(N, X_star.shape[0])
-idx = np.random.choice(X_star.shape[0], N, replace=False)
+# idx = np.random.choice(X_star.shape[0], N, replace=False)
 # np.save("./nls_weights/idx.npy", idx)
 idx = np.load("./nls_weights/idx.npy")
 
@@ -81,7 +81,7 @@ X_star = to_tensor(X_star, True).to(device)
 feature_names = ['hf', '|hf|', 'h_xx']
 
 class RobustComplexPINN(nn.Module):
-    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)):
+    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, init_cs=(0.01, 0.01), init_betas=(0.0, 0.0)):
         super(RobustComplexPINN, self).__init__()
         # FFTNN
         global N
@@ -111,6 +111,7 @@ class RobustComplexPINN(nn.Module):
         total_loss = []
 
         if denoising: 
+            # best: normalize=True, center=False, is_clamp=True, axis=0
             # Denoising FFT on (x, t)
             HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
@@ -118,10 +119,10 @@ class RobustComplexPINN(nn.Module):
             
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
-            H = self.inp_rpca(HL, HS, normalize=True)
+            H = self.inp_rpca(HL, HS, normalize=True, center=True, is_clamp=False, axis=0)
             y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
                                     cat(y_input_S.real, y_input_S.imag), 
-                                    normalize=True)
+                                    normalize=True, center=True, is_clamp=False, axis=0)
             y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
             
             grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
@@ -263,10 +264,9 @@ del predictions, h, h_x, h_xx, abs_h
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
-                         init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
-pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs_old.pth"))
-
-epochs1, epochs2 = 0, 100 # 1, 10, 20
+                         init_cs=(0.01, 0.01), init_betas=(0.0, 0.0)).to(device)
+pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs.pth"))
+epochs1, epochs2 = 100, 50 # 1, 10, 20
 
 optimizer1 = MADGRAD(list(pinn.inp_rpca.parameters())+list(pinn.out_rpca.parameters())+list(pinn.model.parameters())+list(pinn.callable_loss_fn.parameters()), lr=5e-7, momentum=0.95)
 
@@ -303,5 +303,5 @@ for i in range(len(grounds)):
     err = est_coeffs[i]-grounds[i]
     errs.append(100*abs(err.imag)/abs(grounds[i].imag))
 errs = np.array(errs)
-save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
+save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs_new.pth")
 print(errs.mean(), errs.std())
