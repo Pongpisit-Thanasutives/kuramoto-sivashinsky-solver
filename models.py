@@ -529,16 +529,39 @@ class ComplexAutoEncoder(nn.Module):
         if type(X) == torch.Tensor: X = real2cplx(X)
         return complex_mse(self(X), X).item()
 
+# class RobustPCANN(nn.Module):
+#     def __init__(self, beta=0.0, is_beta_trainable=True, inp_dims=2, hidden_dims=50):
+#         super(RobustPCANN, self).__init__()
+#         if is_beta_trainable: self.beta = nn.Parameter(data=torch.FloatTensor([beta]), requires_grad=True)
+#         else: self.beta = beta
+#         self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims), nn.Tanh())
+
+#     def forward(self, O, S, order="fro", normalize=True, is_clamp=True):
+#         corr = self.proj(S)
+#         if normalize: corr = corr / torch.norm(corr, p=order)
+#         if is_clamp: beta = torch.clamp(self.beta, min=-1.0, max=1.0)
+#         else: beta = self.beta
+#         return O - beta*corr
+
 class RobustPCANN(nn.Module):
     def __init__(self, beta=0.0, is_beta_trainable=True, inp_dims=2, hidden_dims=50):
         super(RobustPCANN, self).__init__()
         if is_beta_trainable: self.beta = nn.Parameter(data=torch.FloatTensor([beta]), requires_grad=True)
         else: self.beta = beta
-        self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims), nn.Tanh())
+        # self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims), nn.Tanh())
+        # self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.BatchNorm1d(hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
+        self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
 
-    def forward(self, O, S, order="fro", normalize=True, is_clamp=True):
+    def forward(self, O, S, order="fro", normalize=True, is_clamp=True, axis=None, center=False):
+        if axis is not None: return O - torch.std(O, axis=axis)*self.infer_noise(O, S, order, normalize, is_clamp, center)
+        else: return O - torch.std(O)*self.infer_noise(O, S, order, normalize, is_clamp, center)
+
+    def infer_noise(self, O, S, order="fro", normalize=True, is_clamp=True, center=False):
         corr = self.proj(S)
-        if normalize: corr = corr / torch.norm(corr, p=order)
+        if center:
+            corr = (corr-corr.mean())/corr.std()
+        if normalize: 
+            corr = (1e-2)*corr
         if is_clamp: beta = torch.clamp(self.beta, min=-1.0, max=1.0)
         else: beta = self.beta
-        return O - beta*corr
+        return beta*corr
