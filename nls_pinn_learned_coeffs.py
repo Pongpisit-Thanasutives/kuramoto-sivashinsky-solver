@@ -51,7 +51,8 @@ v_star = to_column_vector(Exact_v.T)
 N = 5000
 N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-np.save("./nls_weights/idx.npy", idx)
+# np.save("./nls_weights/idx.npy", idx)
+idx = np.load("./nls_weights/idx.npy")
 
 X_train = X_star[idx, :]
 u_train = u_star[idx, :]
@@ -263,8 +264,9 @@ del predictions, h, h_x, h_xx, abs_h
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
                          init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
+pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs_old.pth"))
 
-epochs1, epochs2 = 200, 100 # 1, 10, 20
+epochs1, epochs2 = 0, 100 # 1, 10, 20
 
 optimizer1 = MADGRAD(list(pinn.inp_rpca.parameters())+list(pinn.out_rpca.parameters())+list(pinn.model.parameters())+list(pinn.callable_loss_fn.parameters()), lr=5e-7, momentum=0.95)
 
