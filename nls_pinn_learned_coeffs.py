@@ -1,7 +1,6 @@
 # coding: utf-8
 import torch
 from torch.autograd import grad, Variable
-import torch.nn.functional as F
 
 import os
 from collections import OrderedDict
@@ -27,6 +26,7 @@ print("You're running on", device)
 # Adding noise
 noise_intensity = 0.01/np.sqrt(2)
 noisy_xt = True; noisy_labels = True
+DENOISE = False
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -49,7 +49,9 @@ u_star = to_column_vector(Exact_u.T)
 v_star = to_column_vector(Exact_v.T)
 
 N = 5000
+N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
+np.save("./nls_weights/idx.npy", idx)
 
 X_train = X_star[idx, :]
 u_train = u_star[idx, :]
@@ -163,8 +165,8 @@ class RobustComplexPINN(nn.Module):
         return 2*(inp-self.lb)/(self.ub-self.lb)-1
 
 dft_tag = "nodft"
-DENOISE = True
 if DENOISE: dft_tag = "dft"
+print(dft_tag)
 
 def closure():
     global X_train, X_train_S, h_train, h_train_S, x_fft, x_PSD, t_fft, t_PSD
@@ -262,7 +264,7 @@ pinn = RobustComplexPINN(model=complex_model, loss_fn=mod,
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
                          init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
 
-epochs1, epochs2 = 200, 50 # 1, 10, 20
+epochs1, epochs2 = 200, 100 # 1, 10, 20
 
 optimizer1 = MADGRAD(list(pinn.inp_rpca.parameters())+list(pinn.out_rpca.parameters())+list(pinn.model.parameters())+list(pinn.callable_loss_fn.parameters()), lr=5e-7, momentum=0.95)
 
@@ -286,7 +288,7 @@ optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500,
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
     optimizer2.step(closure)
-    if (i % 1) == 0 or i == epochs2-1:
+    if (i % 10) == 0 or i == epochs2-1:
         l = closure()
         print("Epoch {}: ".format(i), l.item())
 
@@ -299,6 +301,5 @@ for i in range(len(grounds)):
     err = est_coeffs[i]-grounds[i]
     errs.append(100*abs(err.imag)/abs(grounds[i].imag))
 errs = np.array(errs)
-errs.mean(), errs.std()
-
 save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
+print(errs.mean(), errs.std())
