@@ -104,25 +104,26 @@ class RobustComplexPINN(nn.Module):
         if self.scale: H = self.neural_net_scale(H)
         return self.model(H)
     
-    def loss(self, HL, HS, y_input, y_input_S, update_network_params=True, update_pde_params=True):
+    def loss(self, HL, HS, y_input, y_input_S, update_network_params=True, update_pde_params=True, denoising=True):
         total_loss = []
-        
-        # Denoising FFT on (x, t)
-        HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
-                 torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
-        HS = HL-HS
-        
-        # Denoising FFT on y_input
-        y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
-        
-        H = self.inp_rpca(HL, HS, normalize=True)
-        
-        y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
-                                cat(y_input_S.real, y_input_S.imag), 
-                                normalize=True)
-        y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
-        
-        grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
+
+        if denoising: 
+            # Denoising FFT on (x, t)
+            HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
+                     torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
+            HS = HL-HS
+            
+            # Denoising FFT on y_input
+            y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
+            H = self.inp_rpca(HL, HS, normalize=True)
+            y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
+                                    cat(y_input_S.real, y_input_S.imag), 
+                                    normalize=True)
+            y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
+            
+            grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
+        else:
+            grads_dict, u_t = self.grads_dict(HL[:, 0:1], HL[:, 1:2])
         
         # MSE Loss
         if update_network_params:
@@ -161,11 +162,15 @@ class RobustComplexPINN(nn.Module):
     def neural_net_scale(self, inp): 
         return 2*(inp-self.lb)/(self.ub-self.lb)-1
 
+dft_tag = "nodft"
+DENOISE = True
+if DENOISE: dft_tag = "dft"
+
 def closure():
     global X_train, X_train_S, h_train, h_train_S, x_fft, x_PSD, t_fft, t_PSD
     if torch.is_grad_enabled():
         optimizer2.zero_grad(set_to_none=True)
-    losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), h_train, (h_train_fft, h_train_PSD), update_network_params=True, update_pde_params=True)
+    losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), h_train, (h_train_fft, h_train_PSD), update_network_params=True, update_pde_params=True, denoising=DENOISE)
     l = sum(losses)
     if l.requires_grad:
         l.backward(retain_graph=True)
@@ -175,7 +180,7 @@ def mtl_closure():
     global X_train, X_train_S, h_train, h_train_S, x_fft, x_PSD, t_fft, t_PSD
     if torch.is_grad_enabled():
         optimizer1.zero_grad(set_to_none=True)
-    losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), h_train, (h_train_fft, h_train_PSD), update_network_params=True, update_pde_params=True)
+    losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), h_train, (h_train_fft, h_train_PSD), update_network_params=True, update_pde_params=True, denoising=DENOISE)
     loss = losses[0] + (1e-1)*losses[1]
     if loss.requires_grad: loss.backward(retain_graph=True)
     return loss
@@ -251,12 +256,13 @@ h_train_S = h_train-h_train_S
 
 del noise_x, noise_t
 del X_star, X_dis, xx, tt 
+del predictions, h, h_x, h_xx, abs_h
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
                          init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
 
-epochs1, epochs2 = 200, 1 # 1, 10, 20
+epochs1, epochs2 = 200, 50 # 1, 10, 20
 
 optimizer1 = MADGRAD(list(pinn.inp_rpca.parameters())+list(pinn.out_rpca.parameters())+list(pinn.model.parameters())+list(pinn.callable_loss_fn.parameters()), lr=5e-7, momentum=0.95)
 
@@ -275,7 +281,7 @@ for i in range(epochs1):
         print("Epoch {}: ".format(i), l.item())
 
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, 
-                               max_eval=int(500*1.25), history_size=150, 
+                               max_eval=int(500*1.25), history_size=300, 
                                line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
@@ -294,3 +300,5 @@ for i in range(len(grounds)):
     errs.append(100*abs(err.imag)/abs(grounds[i].imag))
 errs = np.array(errs)
 errs.mean(), errs.std()
+
+save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
