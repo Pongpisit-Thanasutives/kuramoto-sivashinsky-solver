@@ -6,4 +6,5 @@ pip install -r requirements.txt
 # python3 reproduced_burgers.py
 # python3 ks_selector.py
 # python3 qho.py
-python3 qho_pinn_learned_coeffs.py
+# python3 qho_pinn_learned_coeffs.py
+python3 nls_pinn_learned_coeffs.py

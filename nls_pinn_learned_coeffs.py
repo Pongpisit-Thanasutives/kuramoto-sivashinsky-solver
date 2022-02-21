@@ -48,7 +48,7 @@ X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None]))
 u_star = to_column_vector(Exact_u.T)
 v_star = to_column_vector(Exact_v.T)
 
-N = 500
+N = 5000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 
 X_train = X_star[idx, :]
@@ -69,9 +69,11 @@ else: print("Clean labels")
 X_train = to_tensor(X_star, True).to(device)
 u_train = to_tensor(u_star, False).to(device)
 v_train = to_tensor(v_star, False).to(device)
-h_train = torch.complex(u_train, v_train)
+h_train = torch.complex(u_train, v_train).to(device)
 lb = to_tensor(lb, False).to(device)
 ub = to_tensor(ub, False).to(device)
+
+X_star = to_tensor(X_star, True).to(device)
 
 feature_names = ['hf', '|hf|', 'h_xx']
 
@@ -215,6 +217,7 @@ for p in semisup_model_state_dict:
     if inner_part in p:
         parameters[p.replace(inner_part, "")] = semisup_model_state_dict[p]
 complex_model.load_state_dict(parameters)
+complex_model = complex_model.to(device)
 
 t_steps = 160 # 1000, 160
 t_steps = min(t_steps, t.shape[0])
@@ -222,15 +225,15 @@ t_steps = min(t_steps, t.shape[0])
 print("Considering up to t = ", t[:, 0][:t_steps].max())
 n_test = x.shape[0]*t_steps
 idx_test = np.arange(n_test)
-X_dis = to_tensor(X_star[:n_test])
-xx, tt = dimension_slicing(to_tensor(X_dis, True))
+X_dis = X_star[:n_test]
+xx, tt = dimension_slicing(X_dis)
 predictions = complex_model(cat(xx, tt))
 h = cplx2tensor(predictions)
 h_x = complex_diff(predictions, xx, device)
 h_xx = complex_diff(h_x, xx, device)
 h_t = complex_diff(predictions, tt, device)
 abs_h = (h.real**2+h.imag**2)+0.0j
-cns = np.linalg.lstsq(cat(h*abs_h, h_xx).detach().numpy(), h_t.detach().numpy(), rcond=-1)[0].flatten().tolist()
+cns = np.linalg.lstsq(cat(h*abs_h, h_xx).cpu().detach().numpy(), h_t.cpu().detach().numpy(), rcond=-1)[0].flatten().tolist()
 program1 = "X0*X1"
 pde_expr1, variables1,  = build_exp(program1); print(pde_expr1, variables1)
 program2 = "X2"
@@ -247,6 +250,7 @@ h_train_S, h_train_fft, h_train_PSD = fft1d_denoise(h_train, c=-1, return_real=F
 h_train_S = h_train-h_train_S
 
 del noise_x, noise_t
+del X_star, X_dis, xx, tt 
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
