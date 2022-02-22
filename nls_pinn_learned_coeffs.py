@@ -117,13 +117,13 @@ class RobustComplexPINN(nn.Module):
             HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
             HS = HL-HS
-            H = self.inp_rpca(HL, HS, normalize=False, center=False, is_clamp=False, axis=None)
+            H = self.inp_rpca(HL, HS, normalize=False, center=True, is_clamp=False, axis=None)
             
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
             y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
                                     cat(y_input_S.real, y_input_S.imag), 
-                                    normalize=False, center=False, is_clamp=False, axis=None)
+                                    normalize=False, center=True, is_clamp=False, axis=0)
             y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
             
             grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
@@ -267,7 +267,7 @@ del predictions, h, h_x, h_xx, abs_h
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
-                         init_cs=(1e-1, 1e-1), init_betas=(0.01, 0.01)).to(device)
+                         init_cs=(1e-1, 1e-1), init_betas=(2e-5, 2e-5)).to(device)
 # pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs.pth"))
 epochs1, epochs2 = 200, 200 # 1, 10, 20
 
@@ -299,6 +299,7 @@ for i in range(epochs2):
         l = closure()
         print("Epoch {}: ".format(i), l.item())
         est_coeffs = pinn.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
+        print(est_coeffs)
         errs = []
         for i in range(len(grounds)):
             err = est_coeffs[i]-grounds[i]
