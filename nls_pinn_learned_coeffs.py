@@ -48,9 +48,9 @@ X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None]))
 u_star = to_column_vector(Exact_u.T)
 v_star = to_column_vector(Exact_v.T)
 
-N = 5000
+N = 2500
 N = min(N, X_star.shape[0])
-# idx = np.random.choice(X_star.shape[0], N, replace=False)
+idx = np.random.choice(X_star.shape[0], N, replace=False)
 # np.save("./nls_weights/idx.npy", idx)
 idx = np.load("./nls_weights/idx.npy")
 
@@ -60,13 +60,14 @@ v_train = v_star[idx, :]
 
 if noisy_xt:
     print("Noisy (x, t)")
-    X_train = perturb2d(X_train, intensity=noise_intensity)
+    # X_train = perturb2d(X_train, intensity=noise_intensity)
+    X_train = perturb(X_train, intensity=0.01)
 else: print("Clean (x, t)")
 
 if noisy_labels:
 	print("Noisy labels")
-	u_train = perturb(u_train, intensity=noise_intensity)
-	v_train = perturb(v_train, intensity=noise_intensity)
+	u_train = perturb(u_train, intensity=0.01)
+	v_train = perturb(v_train, intensity=0.01)
 else: print("Clean labels")
 
 X_train = to_tensor(X_star, True).to(device)
@@ -116,13 +117,13 @@ class RobustComplexPINN(nn.Module):
             HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
             HS = HL-HS
+            H = self.inp_rpca(HL, HS, normalize=False, center=False, is_clamp=False, axis=None)
             
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
-            H = self.inp_rpca(HL, HS, normalize=True, center=True, is_clamp=False, axis=0)
             y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
                                     cat(y_input_S.real, y_input_S.imag), 
-                                    normalize=True, center=True, is_clamp=False, axis=0)
+                                    normalize=False, center=False, is_clamp=False, axis=None)
             y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
             
             grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
@@ -134,7 +135,9 @@ class RobustComplexPINN(nn.Module):
             total_loss.append(complex_mse(grads_dict['X'+self.feature2index['hf']], y_input))
         # PDE Loss
         if update_pde_params:
-            total_loss.append(complex_mse(self.callable_loss_fn(grads_dict), u_t))
+            eq_loss = complex_mse(self.callable_loss_fn(grads_dict), u_t)
+            # eq_loss += torch.sum(torch.abs(self.callable_loss_fn.complex_coeffs().real))
+            total_loss.append(eq_loss)
             
         return total_loss
     
@@ -264,9 +267,9 @@ del predictions, h, h_x, h_xx, abs_h
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
-                         init_cs=(0.01, 0.01), init_betas=(0.0, 0.0)).to(device)
-pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs.pth"))
-epochs1, epochs2 = 100, 50 # 1, 10, 20
+                         init_cs=(1e-1, 1e-1), init_betas=(0.0, 0.0)).to(device)
+# pinn.load_state_dict(torch.load("./nls_weights/noisy2_dft_pinn_learned_coeffs.pth"))
+epochs1, epochs2 = 200, 100 # 1, 10, 20
 
 optimizer1 = MADGRAD(list(pinn.inp_rpca.parameters())+list(pinn.out_rpca.parameters())+list(pinn.model.parameters())+list(pinn.callable_loss_fn.parameters()), lr=5e-7, momentum=0.95)
 
@@ -301,7 +304,9 @@ grounds = np.array([1j, 0+0.5j])
 errs = []
 for i in range(len(grounds)):
     err = est_coeffs[i]-grounds[i]
-    errs.append(100*abs(err.imag)/abs(grounds[i].imag))
+    errs.append(100*(abs(err.imag)+abs(err.real))/abs(grounds[i].imag))
 errs = np.array(errs)
-save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs_new.pth")
+save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
 print(errs.mean(), errs.std())
+print(pinn.inp_rpca.beta)
+print(pinn.out_rpca.beta)

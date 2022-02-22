@@ -552,15 +552,14 @@ class RobustPCANN(nn.Module):
         # self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.BatchNorm1d(hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
         self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
 
-    def forward(self, O, S, order="fro", normalize=True, is_clamp=True, axis=None, center=False):
-        if axis is not None: return O - torch.std(O, axis=axis)*self.infer_noise(O, S, order, normalize, is_clamp, axis, center)
-        else: return O - torch.std(O)*self.infer_noise(O, S, order, normalize, is_clamp, axis, center)
+    def forward(self, O, S, normalize=True, is_clamp=True, axis=None, center=False):
+        if axis is not None: return O - torch.std(O, axis=axis)*self.infer_noise(O, S, normalize, is_clamp, axis, center)
+        else: return O - torch.std(O)*self.infer_noise(O, S, normalize, is_clamp, axis, center)
 
-    def infer_noise(self, O, S, order="fro", normalize=True, is_clamp=True, axis=None, center=False):
+    def infer_noise(self, O, S, normalize=True, is_clamp=True, axis=None, center=False):
         corr = self.proj(S)
         if center:
-            if axis is not None: corr = (corr-corr.mean(axis=axis))/corr.std(axis=axis)
-            else: corr = (corr-corr.mean())/corr.std()
+            corr = (corr-corr.mean())/corr.std()
         if normalize: 
             corr = (1e-2)*corr
         if is_clamp: beta = torch.clamp(self.beta, min=-1.0, max=1.0)
