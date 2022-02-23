@@ -25,8 +25,8 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01
-noisy_xt = True; noisy_labels = True
-DENOISE = True
+noisy_xt = False; noisy_labels = True
+DENOISE = False
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -61,13 +61,22 @@ v_train = v_star[idx, :]
 if noisy_xt:
     print("Noisy (x, t)")
     # X_train = perturb2d(X_train, intensity=noise_intensity)
-    X_train = perturb(X_train, intensity=noise_intensity)
+    # X_train_noise = perturb(X_train, intensity=noise_intensity, overwrite=False)
+    # np.save("./nls_weights/X_train_noise.npy", X_train_noise)
+    X_train_noise = np.load("./nls_weights/X_train_noise.npy")
+    X_train = X_train + X_train_noise
 else: print("Clean (x, t)")
 
 if noisy_labels:
-	print("Noisy labels")
-	u_train = perturb(u_train, intensity=noise_intensity)
-	v_train = perturb(v_train, intensity=noise_intensity)
+    print("Noisy labels")
+    # u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
+    # np.save("./nls_weights/u_noise.npy", u_noise)
+    u_noise = np.load("./nls_weights/u_noise.npy")
+    u_train = u_train + u_noise
+    # v_noise = perturb(v_train, intensity=noise_intensity, overwrite=False)
+    # np.save("./nls_weights/v_noise.npy", v_noise)
+    v_noise = np.load("./nls_weights/v_noise.npy")
+    v_train = v_train + v_noise
 else: print("Clean labels")
 
 X_train = to_tensor(X_star, True).to(device)
