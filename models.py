@@ -552,12 +552,14 @@ class RobustPCANN(nn.Module):
         # self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.BatchNorm1d(hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
         self.proj = nn.Sequential(nn.Linear(inp_dims, hidden_dims), nn.Tanh(), nn.Linear(hidden_dims, inp_dims))
 
-    def forward(self, O, S, normalize=True, is_clamp=True, axis=None, center=False):
-        if axis is not None: return O - torch.std(O, axis=axis)*self.infer_noise(O, S, normalize, is_clamp, axis, center)
-        else: return O - torch.std(O)*self.infer_noise(O, S, normalize, is_clamp, axis, center)
+    def forward(self, O, S, normalize=True, is_clamp=True, axis=None, center=False, apply_tanh=False):
+        if axis is not None: return O - torch.std(O, axis=axis)*self.infer_noise(O, S, normalize, is_clamp, axis, center, apply_tanh)
+        else: return O - torch.std(O)*self.infer_noise(O, S, normalize, is_clamp, axis, center, apply_tanh)
 
-    def infer_noise(self, O, S, normalize=True, is_clamp=True, axis=None, center=False):
+    def infer_noise(self, O, S, normalize=True, is_clamp=True, axis=None, center=False, apply_tanh=False):
         corr = self.proj(S)
+        if apply_tanh:
+            corr = torch.tanh(corr)
         if center:
             corr = (corr-corr.mean())/corr.std()
         if normalize: 

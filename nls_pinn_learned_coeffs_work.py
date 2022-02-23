@@ -25,8 +25,8 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = True
-DENOISE = False
+noisy_xt = False; noisy_labels = False
+DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -77,6 +77,8 @@ if noisy_labels:
     # np.save("./nls_weights/v_noise.npy", v_noise)
     v_noise = np.load("./nls_weights/v_noise.npy")
     v_train = v_train + v_noise
+
+    del v_noise, u_noise
 else: print("Clean labels")
 
 X_train = to_tensor(X_star, True).to(device)
@@ -126,13 +128,13 @@ class RobustComplexPINN(nn.Module):
             HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
             HS = HL-HS
-            H = self.inp_rpca(HL, HS, normalize=False, center=True, is_clamp=False, axis=None)
+            H = self.inp_rpca(HL, HS, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
             
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
             y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
                                     cat(y_input_S.real, y_input_S.imag), 
-                                    normalize=False, center=True, is_clamp=False, axis=0)
+                                    normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
             
             grads_dict, u_t = self.grads_dict(H[:, 0:1], H[:, 1:2])
@@ -318,3 +320,4 @@ for i in range(epochs2):
         if errs.mean() < max_err:
             save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
             max_err = errs.mean()
+print("Best err mean:", max_err)
