@@ -119,6 +119,9 @@ def to_numpy(a_tensor):
 def relative_l2_error(sig, ground):
     return linalg.norm((sig-ground), 2)/linalg.norm(ground, 2)
 
+def complex_l1_norm(cc):
+    return np.abs(cc.real) + np.abs(cc.imag)
+
 def perturb(a_array, intensity=0.01, noise_type="normal", overwrite=True):
     if intensity <= 0.0: return a_array
     if noise_type == "normal": 
