@@ -314,7 +314,7 @@ for i in range(epochs2):
         print(est_coeffs)
         errs = []
         for i in range(len(grounds)):
-            # Rudy style...
+            # Relative l1 error
             err = est_coeffs[i]-grounds[i]
             errs.append(100*(abs(err.imag)+abs(err.real))/abs(grounds[i].imag))
         errs = np.array(errs)
