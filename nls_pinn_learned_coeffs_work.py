@@ -25,7 +25,7 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
 DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
@@ -61,21 +61,22 @@ v_train = v_star[idx, :]
 if noisy_xt:
     print("Noisy (x, t)")
     # X_train = perturb2d(X_train, intensity=noise_intensity)
-    # X_train_noise = perturb(X_train, intensity=noise_intensity, overwrite=False)
+    X_train_noise = perturb(X_train, intensity=noise_intensity, overwrite=False)
     # np.save("./nls_weights/X_train_noise.npy", X_train_noise)
-    X_train_noise = np.load("./nls_weights/X_train_noise.npy")
+    # X_train_noise = np.load("./nls_weights/X_train_noise.npy")
     X_train = X_train + X_train_noise
 else: print("Clean (x, t)")
 
 if noisy_labels:
     print("Noisy labels")
-    # u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
+    u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
     # np.save("./nls_weights/u_noise.npy", u_noise)
-    u_noise = np.load("./nls_weights/u_noise.npy")
+    # u_noise = np.load("./nls_weights/u_noise.npy")
     u_train = u_train + u_noise
-    # v_noise = perturb(v_train, intensity=noise_intensity, overwrite=False)
+
+    v_noise = perturb(v_train, intensity=noise_intensity, overwrite=False)
     # np.save("./nls_weights/v_noise.npy", v_noise)
-    v_noise = np.load("./nls_weights/v_noise.npy")
+    # v_noise = np.load("./nls_weights/v_noise.npy")
     v_train = v_train + v_noise
 
     del v_noise, u_noise
@@ -318,6 +319,6 @@ for i in range(epochs2):
         errs = np.array(errs)
         print(errs.mean(), errs.std())
         if errs.mean() < max_err:
-            save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs.pth")
+            save(pinn, f"./nls_weights/{tag}_{dft_tag}_pinn_learned_coeffs_new.pth")
             max_err = errs.mean()
 print("Best err mean:", max_err)
