@@ -28,20 +28,39 @@ X_star, u_star = get_trainable_data(X, T, Exact)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
+force_save = False
+
 N = 100000 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
-# idx = np.random.choice(X_star.shape[0], N, replace=False)
-idx = np.arange(N)
+idx = np.random.choice(X_star.shape[0], N, replace=False)
+# idx = np.arange(N)
+if force_save: np.save("./weights/final/idx.npy", idx)
+else: idx = np.load("./weights/final/idx.npy")
+
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
-if noisy_xt: X_u_train = perturb(X_u_train, noise_intensity); print("Noisy (x, t)")
+noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+if noisy_xt: 
+    print("Noisy (x, t)")
+    X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
+    if force_save: np.save("./weights/final/X_noise.npy", X_noise)
+    else: X_noise = np.load("./weights/final/X_noise.npy")
+    X_u_train = X_u_train + X_noise
 else: print("Clean (x, t)")
-if noisy_labels: u_train = perturb(u_train, noise_intensity); print("Noisy labels")
+if noisy_labels: 
+    print("Noisy labels")
+    u_noise = perturb(u_train, noise_intensity, overwrite=False)
+    if force_save: np.save("./weights/final/u_noise.npy", u_noise)
+    else: u_noise = np.load("./weights/final/u_noise.npy")
+    u_train = u_train + u_noise
 else: print("Clean labels")
+
+noiseless_mode = True
+if noiseless_mode: model_name = "nodft"
+else: model_name = "dft"
 
 # Convert to torch.tensor
 X_u_train = to_tensor(X_u_train, True)
@@ -57,40 +76,21 @@ ub = scaling_factor*to_tensor(ub, False).to(device)
 # Feature names, base on the symbolic regression results (only the important features)
 feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 
-### 1-st results ###
-# Noisy (x, t) and noisy labels
-# PDE derived using STRidge to NN diff features
-# u_t = (-0.912049 +0.000000i)u_xx
-#     + (-0.909050 +0.000000i)u_xxxx
-#     + (-0.951584 +0.000000i)uf*u_x
-
-# Clean (x, t) but noisy labels
-# PDE derived using STRidge to NN diff features
-# u_t = (-0.942656 +0.000000i)u_xx
-#     + (-0.900600 +0.000000i)u_xxxx
-#     + (-0.919862 +0.000000i)uf*u_x
-
-# Clean all
-# PDE derived using STRidge to fd_derivatives
-# u_t = (-0.995524 +0.000000i)uu_{x}
-#     + (-1.006815 +0.000000i)u_{xx}
-#     + (-1.005177 +0.000000i)u_{xxxx}
-
 program = None; name = None
 if state == 0:
-    program = [-1.0161751508712769, -0.9876205325126648, -0.9817131161689758]
+    program = [-1.002442, -0.970701, -0.940368]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
     name = "cleanall"
 elif state == 1:
-    program = [-0.9498964548110962, -0.9398553967475891, -1.0064408779144287]
+    program = [-0.898254, -0.808380, -0.803464]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
     name = "noisy1"
 elif state == 2:
-    program = [-1.025016188621521, -0.8882913589477539, -0.9990026354789734]
+    program = [-0.846190, -0.766933, -0.855584]
     program = f'''
     {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
     '''
@@ -118,8 +118,8 @@ class RobustPINN(nn.Module):
             self.out_fft_nn = FFTTh(c=init_cs[1])
 
             # Robust Beta-PCA
-            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
-            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=True, inp_dims=1, hidden_dims=32)
+            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=32)
+            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=32)
         
         self.callable_loss_fn = loss_fn
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
@@ -213,7 +213,6 @@ class RobustPINN(nn.Module):
     def neural_net_scale(self, inp): 
         return -1.0+2.0*(inp-self.lb)/(self.ub-self.lb)
 
-noiseless_mode = False
 model = TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1], bn=nn.LayerNorm, dropout=None)
 
 # Pretrained model
@@ -221,7 +220,9 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+if state == 0:
+    semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -232,8 +233,12 @@ model.load_state_dict(parameters)
 
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                  pretrained=True, noiseless_mode=noiseless_mode).to(device)
-# pinn = load_weights(pinn, "./weights/...")
+                  pretrained=True, noiseless_mode=noiseless_mode, 
+                  init_cs=(1e-1, 1e-1), init_betas=(1e-4, 1e-4)).to(device)
+if state == 1:
+    pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
+elif state == 2:
+    pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -247,7 +252,7 @@ t_fft, t_PSD = t_fft.detach().to(device), t_PSD.detach().to(device)
 X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
-WWW = 1e-4
+WWW = 1
 
 def closure():
     if torch.is_grad_enabled():
@@ -271,7 +276,8 @@ epochs1, epochs2 = 1000, 50
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
 pinn.train(); best_loss = 1e6
-saved_weights = f"./weights/deephpm_KS_chaotic_dft_fixedcoeffs_{name}.pth"; saved_last_weights = f"./weights/deephpm_KS_chaotic_dft_fixedcoeffs_last_{name}.pth"
+saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
+saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
 
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
@@ -299,6 +305,8 @@ for i in range(epochs2):
             best_loss = track
             save(pinn, saved_weights)
 
-pred_params = [pinn.param0, pinn.param1, pinn.param2]
+pred_params = np.array([pinn.param0.item(), pinn.param1item(), pinn.param2item()])
 print(pred_params)
+errs = 100*np.abs(pred_params+1)
+print(errs.mean(), errs.std())
 save(pinn, saved_last_weights)
