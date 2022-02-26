@@ -53,7 +53,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-X_u_train = perturb(X_u_train, noise_intensity/np.sqrt(2))
+X_u_train = perturb2d(X_u_train, noise_intensity/np.sqrt(2))
 u_train = perturb(u_train, noise_intensity)
 
 class Network(nn.Module):
