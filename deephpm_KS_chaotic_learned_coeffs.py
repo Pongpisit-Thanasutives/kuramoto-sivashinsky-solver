@@ -30,11 +30,11 @@ ub = X_star.max(axis=0)
 
 force_save = False
 
-N = 100000 # 20000, 30000, 60000
+N = 20000 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-# idx = np.arange(N)
+idx = np.arange(N)
 if force_save: np.save("./weights/final/idx.npy", idx)
 else: idx = np.load("./weights/final/idx.npy")
 
@@ -120,8 +120,8 @@ class RobustPINN(nn.Module):
             self.out_fft_nn = FFTTh(c=init_cs[1])
 
             # Robust Beta-PCA
-            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=32)
-            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=32)
+            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=50)
+            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=50)
         
         self.callable_loss_fn = loss_fn
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
@@ -247,7 +247,8 @@ model.load_state_dict(parameters)
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(1e-1, 1e-1), init_betas=(1e-4, 1e-4)).to(device)
+                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+
 if state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 elif state == 2:
@@ -286,7 +287,7 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 2000, 50
+epochs1, epochs2 = 0, 20
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.95)
 pinn.train(); best_loss = 1e6
@@ -306,7 +307,7 @@ optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eva
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
     optimizer2.step(closure)
-    if (i % 5) == 0 or i == epochs2-1:
+    if (i % 10) == 0 or i == epochs2-1:
         l = closure()
         print("Epoch {}: ".format(i), l.item())
 
