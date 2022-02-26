@@ -58,7 +58,9 @@ if noisy_labels:
     u_train = u_train + u_noise
 else: print("Clean labels")
 
-noiseless_mode = True
+print(X_noise.max(), X_noise.min())
+
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 
@@ -101,7 +103,7 @@ pde_expr, variables = build_exp(program); print(pde_expr, variables)
 mod = sympytorch.SymPyModule(expressions=[pde_expr]); mod.train()
 
 class RobustPINN(nn.Module):
-    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, pretrained=False, noiseless_mode=True, init_cs=(0.5, 0.5), init_betas=(0.0, 0.0)):
+    def __init__(self, model, loss_fn, index2features, scale=False, lb=None, ub=None, pretrained=False, noiseless_mode=True, init_cs=(0.5, 0.5), init_betas=(0.0, 0.0), learnable_pde_coeffs=True):
         super(RobustPINN, self).__init__()
         self.model = model
         if not pretrained: self.model.apply(self.xavier_init)
@@ -125,9 +127,13 @@ class RobustPINN(nn.Module):
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
 
         # Be careful of the indexing you're using here. Need more systematic way of dealing with the parameters.
-        self.param0 = float(self.init_parameters[0])
-        self.param1 = float(self.init_parameters[1])
-        self.param2 = float(self.init_parameters[2])
+        self.param0 = (self.init_parameters[0]).requires_grad_(learnable_pde_coeffs)
+        self.param1 = (self.init_parameters[1]).requires_grad_(learnable_pde_coeffs)
+        self.param2 = (self.init_parameters[2]).requires_grad_(learnable_pde_coeffs)
+        if not learnable_pde_coeffs:
+            self.param0 = float(self.param0)
+            self.param1 = float(self.param1)
+            self.param2 = float(self.param2)
         print("Please check the following parameters.")
         print("Initial parameters", (self.param0, self.param1, self.param2))
         del self.callable_loss_fn, self.init_parameters
@@ -136,6 +142,16 @@ class RobustPINN(nn.Module):
         for idx, fn in enumerate(self.index2features): self.feature2index[fn] = str(idx)
         self.scale = scale; self.lb, self.ub = lb, ub
         self.diff_flag = diff_flag(self.index2features)
+
+    def set_learnable_coeffs(self, condition):
+        if condition: 
+            self.param0 = nn.Parameter(self.param0).requires_grad_(condition)
+            self.param1 = nn.Parameter(self.param1).requires_grad_(condition)
+            self.param2 = nn.Parameter(self.param2).requires_grad_(condition)
+        else:
+            self.param0 = float(self.param0)
+            self.param1 = float(self.param1)
+            self.param2 = float(self.param2)
         
     def xavier_init(self, m):
         if type(m) == nn.Linear:
@@ -155,11 +171,11 @@ class RobustPINN(nn.Module):
             X_input_noise = cat(torch.fft.ifft(self.in_fft_nn(X_input_noise[1])*X_input_noise[0]).real.reshape(-1, 1), 
                                 torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
             X_input_noise = X_input-X_input_noise
-            X_input = self.inp_rpca(X_input, X_input_noise, normalize=True)
+            X_input = self.inp_rpca(X_input, X_input_noise, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
             y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
-            y_input = self.out_rpca(y_input, y_input_noise, normalize=True)
+            y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
         
@@ -196,14 +212,13 @@ class RobustPINN(nn.Module):
         u_xx = self.gradients(u_x, x)[0]
         u_xxx = self.gradients(u_xx, x)[0]
         u_xxxx = self.gradients(u_xxx, x)[0]
-        u_xxxxx = self.gradients(u_xxxx, x)[0]
+
         derivatives = []
         derivatives.append(uf)
         derivatives.append(u_x)
         derivatives.append(u_xx)
         derivatives.append(u_xxx)
         derivatives.append(u_xxxx)
-        derivatives.append(u_xxxxx)
         
         return torch.cat(derivatives, dim=1), u_t
     
@@ -220,9 +235,7 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-if state == 0:
-    semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
-
+semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -258,7 +271,7 @@ def closure():
     if torch.is_grad_enabled():
         optimizer2.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = losses[0]+WWW*losses[1]
+    l = 0.5*(losses[0]+WWW*losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -267,31 +280,28 @@ def mtl_closure():
     if torch.is_grad_enabled():
         optimizer1.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = losses[0]+WWW*losses[1]
+    # print(losses)
+    l = 0.5*(losses[0]+WWW*losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 1000, 50
+epochs1, epochs2 = 2000, 50
 # TODO: Save best state dict and training for more epochs.
-optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.9)
+optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.95)
 pinn.train(); best_loss = 1e6
 saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
 saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
 
+# pinn.set_learnable_coeffs(False)
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
     optimizer1.step(mtl_closure)
-    if (i % 1) == 0 or i == epochs1-1:
+    if (i % 10) == 0 or i == epochs1-1:
         l = mtl_closure()
         print("Epoch {}: ".format(i), l.item())
-        print(pinn.param0, pinn.param1, pinn.param2)
-        track = F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star).item()
-        print(track)
-        if track < best_loss:
-            best_loss = track
-            save(pinn, saved_weights)
         
+# pinn.set_learnable_coeffs(True)
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
@@ -299,14 +309,9 @@ for i in range(epochs2):
     if (i % 5) == 0 or i == epochs2-1:
         l = closure()
         print("Epoch {}: ".format(i), l.item())
-        track = F.mse_loss(pinn(X_star[:, 0:1], X_star[:, 1:2]).detach().cpu(), u_star).item()
-        print(track)
-        if track < best_loss:
-            best_loss = track
-            save(pinn, saved_weights)
 
-pred_params = np.array([pinn.param0.item(), pinn.param1item(), pinn.param2item()])
+save(pinn, saved_last_weights)
+pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, saved_last_weights)

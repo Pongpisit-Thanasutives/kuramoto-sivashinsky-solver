@@ -141,10 +141,11 @@ def perturb(a_array, intensity=0.01, noise_type="normal", overwrite=True):
     else: return noise
 
 # This function assumes that each dimension (variable) is independent from each other.
-def perturb2d(a_array, intensity):
+def perturb2d(a_array, intensity, overwrite=True):
+    out = np.copy(a_array)
     for i in range(a_array.shape[1]):
-        a_array[:, i:i+1] = perturb(a_array[:, i:i+1], intensity=intensity)
-    return a_array
+        out[:, i:i+1] = perturb(a_array[:, i:i+1], intensity=intensity, overwrite=overwrite)
+    return out
 
 def build_exp(program, trainable_one=True):
     x = Symbol("x"); y = Symbol("y")
