@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import os
 from collections import OrderedDict
 from scipy.io import loadmat
+from scipy.signal import wiener
 from utils import *
 from preprocess import *
 from models import RobustPCANN
@@ -60,8 +61,8 @@ else: print("Clean labels")
 
 # print(X_noise.max(), X_noise.min())
 
-u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False)
-X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False)
+u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
+X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
 noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
@@ -123,8 +124,8 @@ class RobustPINN(nn.Module):
             self.out_fft_nn = FFTTh(c=init_cs[1])
 
             # Robust Beta-PCA
-            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=50)
-            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=50)
+            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=32)
+            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=32)
         
         self.callable_loss_fn = loss_fn
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
@@ -179,7 +180,7 @@ class RobustPINN(nn.Module):
             
             # (2) Denoising FFT on y_input
             # y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
-            u_input_noise = u_noise_wiener
+            y_input_noise = u_noise_wiener
             y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
@@ -252,12 +253,17 @@ model.load_state_dict(parameters)
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-5)).to(device)
+                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
 if state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 elif state == 2:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
+
+pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                  index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                  pretrained=True, noiseless_mode=noiseless_mode, 
+                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
