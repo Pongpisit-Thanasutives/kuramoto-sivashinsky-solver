@@ -58,11 +58,14 @@ if noisy_labels:
     u_train = u_train + u_noise
 else: print("Clean labels")
 
-print(X_noise.max(), X_noise.min())
+# print(X_noise.max(), X_noise.min())
+
+u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False)
+X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False)
 
 noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
-else: model_name = "dft"
+else: model_name = "wiener"
 
 # Convert to torch.tensor
 X_u_train = to_tensor(X_u_train, True)
@@ -168,13 +171,15 @@ class RobustPINN(nn.Module):
         if not self.noiseless_mode:
             # (1) Denoising FFT on (x, t)
             # This line returns the approx. recon.
-            X_input_noise = cat(torch.fft.ifft(self.in_fft_nn(X_input_noise[1])*X_input_noise[0]).real.reshape(-1, 1), 
-                                torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
-            X_input_noise = X_input-X_input_noise
+#            X_input_noise = cat(torch.fft.ifft(self.in_fft_nn(X_input_noise[1])*X_input_noise[0]).real.reshape(-1, 1), 
+#                                torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
+#            X_input_noise = X_input-X_input_noise
+            X_input_noise = X_noise_wiener
             X_input = self.inp_rpca(X_input, X_input_noise, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
-            y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
+            # y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
+            u_input_noise = u_noise_wiener
             y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
@@ -247,7 +252,7 @@ model.load_state_dict(parameters)
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+                  init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-5)).to(device)
 
 if state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
