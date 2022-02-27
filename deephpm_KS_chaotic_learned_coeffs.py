@@ -29,7 +29,7 @@ X_star, u_star = get_trainable_data(X, T, Exact)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-force_save = False
+force_save = True
 
 N = 20000 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
@@ -43,7 +43,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -59,12 +59,10 @@ if noisy_labels:
     u_train = u_train + u_noise
 else: print("Clean labels")
 
-# print(X_noise.max(), X_noise.min())
-
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "wiener"
 
@@ -85,23 +83,17 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 program = None; name = None
 if state == 0:
     program = [-1.002442, -0.970701, -0.940368]
-    program = f'''
-    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
-    '''
     name = "cleanall"
-elif state == 1:
-    program = [-0.898254, -0.808380, -0.803464]
-    program = f'''
-    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
-    '''
-    name = "noisy1"
 elif state == 2:
+    program = [-0.898254, -0.808380, -0.803464]
+    name = "noisy1"
+    print(X_noise.max(), X_noise.min())
+elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
-    program = f'''
-    {program[1]}*u_xx{program[0]}*u_xxxx{program[2]}*uf*u_x
-    '''
     name = "noisy2"
-
+program = f'''
+{program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
+'''
 print("name =", name)
 pde_expr, variables = build_exp(program); print(pde_expr, variables)
 mod = sympytorch.SymPyModule(expressions=[pde_expr]); mod.train()
@@ -140,6 +132,7 @@ class RobustPINN(nn.Module):
             self.param2 = float(self.param2)
         print("Please check the following parameters.")
         print("Initial parameters", (self.param0, self.param1, self.param2))
+        print("u_xxxx, u_xx, uu_x")
         del self.callable_loss_fn, self.init_parameters
         
         self.index2features = index2features; self.feature2index = {}
@@ -241,7 +234,8 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+# semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+semisup_model_state_dict = load_fn("./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -260,10 +254,11 @@ if state == 1:
 elif state == 2:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 
-pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                  index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                  pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+if state == 1 or state ==2:
+    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                      pretrained=True, noiseless_mode=noiseless_mode, 
+                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
