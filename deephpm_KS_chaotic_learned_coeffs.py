@@ -234,8 +234,8 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-# semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
-semisup_model_state_dict = load_fn("./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth")
+semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
+# semisup_model_state_dict = load_fn("./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."

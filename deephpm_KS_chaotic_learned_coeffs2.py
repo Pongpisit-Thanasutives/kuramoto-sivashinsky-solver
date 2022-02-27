@@ -21,7 +21,7 @@ from tqdm import trange
 import sympy
 import sympytorch
 
-DATA_PATH = './data/KS_chaotic.mat'
+DATA_PATH = './data/kuramoto_sivishinky.mat'
 X, T, Exact = space_time_grid(data_path=DATA_PATH, real_solution=True)
 X_star, u_star = get_trainable_data(X, T, Exact)
 
@@ -31,7 +31,7 @@ ub = X_star.max(axis=0)
 
 force_save = True
 
-N = 20000 # 20000, 30000, 60000
+N = 1024*21 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -123,17 +123,15 @@ class RobustPINN(nn.Module):
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
 
         # Be careful of the indexing you're using here. Need more systematic way of dealing with the parameters.
-        self.param0 = (self.init_parameters[0]).requires_grad_(learnable_pde_coeffs)
-        self.param1 = (self.init_parameters[1]).requires_grad_(learnable_pde_coeffs)
-        self.param2 = (self.init_parameters[2]).requires_grad_(learnable_pde_coeffs)
-        if not learnable_pde_coeffs:
-            self.param0 = float(self.param0)
-            self.param1 = float(self.param1)
-            self.param2 = float(self.param2)
+        self.learn = learnable_pde_coeffs
+        self.param0 = (self.init_parameters[0]).requires_grad_(self.learn)
+        self.param1 = (self.init_parameters[1]).requires_grad_(self.learn)
+        self.param2 = (self.init_parameters[2]).requires_grad_(self.learn)
         print("Please check the following parameters.")
         print("Initial parameters", (self.param0, self.param1, self.param2))
         print("u_xxxx, u_xx, uu_x")
         del self.callable_loss_fn, self.init_parameters
+        self.coeff_buffer = None
         
         self.index2features = index2features; self.feature2index = {}
         for idx, fn in enumerate(self.index2features): self.feature2index[fn] = str(idx)
@@ -141,14 +139,12 @@ class RobustPINN(nn.Module):
         self.diff_flag = diff_flag(self.index2features)
 
     def set_learnable_coeffs(self, condition):
-        if condition: 
-            self.param0 = nn.Parameter(self.param0).requires_grad_(condition)
-            self.param1 = nn.Parameter(self.param1).requires_grad_(condition)
-            self.param2 = nn.Parameter(self.param2).requires_grad_(condition)
-        else:
-            self.param0 = float(self.param0)
-            self.param1 = float(self.param1)
-            self.param2 = float(self.param2)
+        self.learn = condition
+        if self.learn: print("Grad updates to PDE coeffs.")
+        else: print("NO Grad updates to PDE coeffs.")
+        self.param0.requires_grad_(self.learn)
+        self.param1.requires_grad_(self.learn)
+        self.param2.requires_grad_(self.learn)
         
     def xavier_init(self, m):
         if type(m) == nn.Linear:
@@ -186,8 +182,13 @@ class RobustPINN(nn.Module):
             
         # PDE Loss
         if update_pde_params:
-            H = cat(grads_dict["uf"]*grads_dict["u_x"], grads_dict["u_xx"], grads_dict["u_xxxx"])
-            l_eq = F.mse_loss(H@(torch.linalg.lstsq(H, u_t).solution), u_t)
+            if not self.learn:
+                H = cat(grads_dict["uf"]*grads_dict["u_x"], grads_dict["u_xx"], grads_dict["u_xxxx"])
+                self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach()
+                l_eq = F.mse_loss(H@(self.coeff_buffer), u_t)
+            else:
+                u_t_pred = (self.param2*grads_dict["uf"]*grads_dict["u_x"])+(self.param1*grads_dict["u_xx"])+(self.param0*grads_dict["u_xxxx"])
+                l_eq = F.mse_loss(u_t_pred, u_t)
             total_loss.append(l_eq)
             
         return total_loss
@@ -300,13 +301,15 @@ pinn.train(); best_loss = 1e6
 saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
 saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
 
-pinn.set_learnable_coeffs(False)
+pinn.set_learnable_coeffs(True)
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
     optimizer1.step(mtl_closure)
     if (i % 10) == 0 or i == epochs1-1:
         l = mtl_closure()
         print("Epoch {}: ".format(i), l.item())
+        #pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
+        #print(pred_params)
         
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
@@ -317,7 +320,8 @@ for i in range(epochs2):
         print("Epoch {}: ".format(i), l.item())
 
 save(pinn, saved_last_weights)
-pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
+if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
+else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
