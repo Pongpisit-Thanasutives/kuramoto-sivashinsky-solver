@@ -31,7 +31,7 @@ ub = X_star.max(axis=0)
 
 force_save = True
 
-N = 1024*21 # 20000, 30000, 60000
+N = 20000 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -86,11 +86,11 @@ if state == 0:
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
-    name = "noisy1"
+    name = "noisy2"
     print(X_noise.max(), X_noise.min())
 elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
-    name = "noisy2"
+    name = "noisy1"
 program = f'''
 {program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
 '''
@@ -294,7 +294,7 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 0, 20
+epochs1, epochs2 = 200, 20
 # TODO: Save best state dict and training for more epochs.
 optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.95)
 pinn.train(); best_loss = 1e6
@@ -311,7 +311,7 @@ for i in range(epochs1):
         #pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
         #print(pred_params)
         
-optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
+optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
     optimizer2.step(closure)
