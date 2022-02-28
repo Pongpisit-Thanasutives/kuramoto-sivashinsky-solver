@@ -293,12 +293,11 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 100, 20
+epochs1, epochs2 = 120, 20
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
-saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+saved_weights = f"./weights/final/deephpm_KS_chaotic_whole_domain_{model_name}_fixedcoeffs_{name}.pth"
 
 pinn.set_learnable_coeffs(False)
 print('1st Phase')
@@ -307,6 +306,8 @@ for i in range(epochs1):
     if (i % 10) == 0 or i == epochs1-1:
         l = closure1()
         print("Epoch {}: ".format(i), l.item())
+
+save(pinn, saved_weights)
 
 if epochs2 > 0:
     pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
