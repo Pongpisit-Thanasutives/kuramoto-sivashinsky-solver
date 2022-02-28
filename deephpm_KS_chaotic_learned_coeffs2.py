@@ -43,7 +43,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -83,7 +83,7 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 
 program = None; name = None
 if state == 0:
-    program = [-0.92, -1.02, -1.01]
+    program = [-1.04, -1.00, -0.99]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -252,16 +252,17 @@ pinn = RobustPINN(model=model, loss_fn=mod,
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
-if state == 1:
+if state == 0:
+    pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
+elif state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 elif state == 2:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 
-if state == 1 or state ==2:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                      pretrained=True, noiseless_mode=noiseless_mode, 
-                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                  index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                  pretrained=True, noiseless_mode=noiseless_mode, 
+                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
