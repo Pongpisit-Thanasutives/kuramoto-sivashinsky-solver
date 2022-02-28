@@ -31,7 +31,7 @@ ub = X_star.max(axis=0)
 
 force_save = True
 
-N = 20000 # 20000, 30000, 60000
+N = 1024*20 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -275,16 +275,7 @@ u_train = u_train.to(device)
 
 WWW = 0.5
 
-def closure():
-    if torch.is_grad_enabled():
-        optimizer2.zero_grad()
-    losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = ((1-WWW)*losses[0])+(WWW*losses[1])
-    if l.requires_grad:
-        l.backward(retain_graph=True)
-    return l
-
-def mtl_closure():
+def closure1():
     if torch.is_grad_enabled():
         optimizer1.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
@@ -294,9 +285,17 @@ def mtl_closure():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 200, 20
-# TODO: Save best state dict and training for more epochs.
-optimizer1 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.95)
+def closure2():
+    if torch.is_grad_enabled():
+        optimizer2.zero_grad()
+    losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
+    l = ((1-WWW)*losses[0])+(WWW*losses[1])
+    if l.requires_grad:
+        l.backward(retain_graph=True)
+    return l
+
+epochs1, epochs2 = 20, 20
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
 saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
 saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
@@ -304,20 +303,28 @@ saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedco
 pinn.set_learnable_coeffs(True)
 print('1st Phase optimization using Adam with PCGrad gradient modification')
 for i in range(epochs1):
-    optimizer1.step(mtl_closure)
+    optimizer1.step(closure1)
     if (i % 10) == 0 or i == epochs1-1:
-        l = mtl_closure()
+        l = closure1()
         print("Epoch {}: ".format(i), l.item())
-        #pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
-        #print(pred_params)
-        
+        pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
+        print(pred_params)
+
+pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                  index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                  pretrained=True, noiseless_mode=noiseless_mode, 
+                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+
+pinn.set_learnable_coeffs(False)
 optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
-    optimizer2.step(closure)
+    optimizer2.step(closure2)
     if (i % 10) == 0 or i == epochs2-1:
-        l = closure()
+        l = closure2()
         print("Epoch {}: ".format(i), l.item())
+        pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
+        print(pred_params)
 
 save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
