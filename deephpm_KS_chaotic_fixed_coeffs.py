@@ -35,34 +35,27 @@ N = 100000 # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-# idx = np.arange(N)
-# if force_save: np.save("./weights/final/idx.npy", idx)
-# else: idx = np.load("./weights/final/idx.npy")
 
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
-    # if force_save: np.save("./weights/final/X_noise.npy", X_noise)
-    # else: X_noise = np.load("./weights/final/X_noise.npy")
     X_u_train = X_u_train + X_noise
 else: print("Clean (x, t)")
 if noisy_labels: 
     print("Noisy labels")
     u_noise = perturb(u_train, noise_intensity, overwrite=False)
-    # if force_save: np.save("./weights/final/u_noise.npy", u_noise)
-    # else: u_noise = np.load("./weights/final/u_noise.npy")
     u_train = u_train + u_noise
 else: print("Clean labels")
 
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -85,13 +78,13 @@ program = None; name = None
 if state == 0:
     program = [-1.01, -1.00, -0.99]
     name = "cleanall"
-elif state == 2:
-    program = [-1.01, -1.00, -0.99]
-    name = "noisy2"
-    print(X_noise.max(), X_noise.min())
 elif state == 1:
-    program = [-1.01, -1.00, -0.99]
+    program = [-0.970, -0.995, -1.000]
     name = "noisy1"
+    print(X_noise.max(), X_noise.min())
+elif state == 2:
+    program = [-0.90, -1.00, -1.01]
+    name = "noisy2"
 program = f'''
 {program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
 '''
@@ -185,7 +178,6 @@ class RobustPINN(nn.Module):
         if update_pde_params:
             u_t_pred = (self.param2*grads_dict["uf"]*grads_dict["u_x"])+(self.param1*grads_dict["u_xx"])+(self.param0*grads_dict["u_xxxx"])
             l_eq = F.mse_loss(u_t_pred, u_t)
-            # l_eq = l_eq + (1e-4)*((self.param0+1)**2+(self.param0+1)**2+(self.param0+1)**2)
             total_loss.append(l_eq)
             
         return total_loss
@@ -293,7 +285,7 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 120, 20
+epochs1, epochs2 = 120, 0
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
@@ -308,18 +300,3 @@ for i in range(epochs1):
         print("Epoch {}: ".format(i), l.item())
 
 save(pinn, saved_weights)
-
-if epochs2 > 0:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                      pretrained=True, noiseless_mode=noiseless_mode, 
-                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
-
-    pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
-    print('2nd Phase')
-    for i in range(epochs2):
-        optimizer2.step(closure2)
-        if (i % 10) == 0 or i == epochs2-1:
-            l = closure2()
-            print("Epoch {}: ".format(i), l.item())

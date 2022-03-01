@@ -190,7 +190,6 @@ class RobustPINN(nn.Module):
             else:
                 u_t_pred = (self.param2*grads_dict["uf"]*grads_dict["u_x"])+(self.param1*grads_dict["u_xx"])+(self.param0*grads_dict["u_xxxx"])
                 l_eq = F.mse_loss(u_t_pred, u_t)
-                # l_eq = l_eq + (1e-4)*((self.param0+1)**2+(self.param0+1)**2+(self.param0+1)**2)
             total_loss.append(l_eq)
             
         return total_loss
