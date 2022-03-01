@@ -298,31 +298,12 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-AAA = 0.5
-def mtl_closure():
-    if torch.is_grad_enabled():
-        optimizer0.zero_grad()
-    losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = ((1-AAA)*losses[0])+(AAA*losses[1])
-    if l.requires_grad:
-        l.backward(retain_graph=True)
-    return l
-
-epochs0 = 200
-optimizer0 = MADGRAD(pinn.parameters(), lr=1e-5, momentum=0.95)
-for i in range(epochs0):
-    optimizer0.step(mtl_closure)
-    if (i % 10) == 0 or i == epochs1-1:
-        l = mtl_closure()
-        print("Epoch {}: ".format(i), l.item())
-        print(pinn.param0, pinn.param1, pinn.param2)
-
 epochs1, epochs2 = 20, 20
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-# saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
-# saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
+saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
 
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -356,6 +337,7 @@ if epochs2 > 0:
             pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
 
+save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
