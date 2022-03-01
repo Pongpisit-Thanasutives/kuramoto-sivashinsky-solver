@@ -40,7 +40,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -81,7 +81,6 @@ if state == 0:
 elif state == 1:
     program = [-0.970, -0.995, -1.000]
     name = "noisy1"
-    print(X_noise.max(), X_noise.min())
 elif state == 2:
     program = [-0.90, -1.00, -1.01]
     name = "noisy2"
@@ -263,7 +262,7 @@ t_fft, t_PSD = t_fft.detach().to(device), t_PSD.detach().to(device)
 X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
-WWW = 0.5
+WWW = 0.1
 if state == 0: WWW = 0.1
 
 def closure1():
@@ -289,7 +288,7 @@ epochs1, epochs2 = 120, 0
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-saved_weights = f"./weights/final/deephpm_KS_chaotic_whole_domain_{model_name}_fixedcoeffs_{name}.pth"
+saved_weights = f"./weights/final/deephpm_KS_chaotic_whole_domain_WWW0.1_{model_name}_fixedcoeffs_{name}.pth"
 
 pinn.set_learnable_coeffs(False)
 print('1st Phase')
