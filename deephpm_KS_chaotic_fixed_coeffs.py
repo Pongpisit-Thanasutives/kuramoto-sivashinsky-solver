@@ -55,7 +55,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -263,7 +263,6 @@ X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
 WWW = 0.1
-if state == 0: WWW = 0.1
 
 def closure1():
     if torch.is_grad_enabled():
@@ -284,7 +283,7 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-epochs1, epochs2 = 120, 0
+epochs1, epochs2 = 40, 0
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
