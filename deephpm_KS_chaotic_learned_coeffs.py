@@ -43,7 +43,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
 noise_intensity = 0.01
-noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -83,7 +83,7 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 
 program = None; name = None
 if state == 0:
-    program = [-1.04, -1.00, -0.99]
+    program = [-1.031544, -0.976023, -0.973498]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -336,7 +336,7 @@ if epochs2 > 0:
             pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
 
-save(pinn, saved_last_weights)
+# save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)

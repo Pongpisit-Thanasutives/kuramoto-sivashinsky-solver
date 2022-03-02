@@ -62,7 +62,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
