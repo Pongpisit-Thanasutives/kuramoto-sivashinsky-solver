@@ -298,7 +298,8 @@ def closure2():
     return l
 
 epochs1, epochs2 = 20, 20
-if state == 0: epochs2 = 0
+if state == 0: 
+    epochs1, epochs2 = 1, 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 # optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
