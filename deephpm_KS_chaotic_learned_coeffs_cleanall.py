@@ -31,7 +31,8 @@ ub = X_star.max(axis=0)
 
 force_save = False
 
-N = 1024*21 # 20000, 30000, 60000
+t_steps = 21
+N = 1024*t_steps # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -62,7 +63,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -185,7 +186,7 @@ class RobustPINN(nn.Module):
         if update_pde_params:
             if not self.learn:
                 H = cat(grads_dict["uf"]*grads_dict["u_x"], grads_dict["u_xx"], grads_dict["u_xxxx"])
-                self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach()
+                self.coeff_buffer = torch.linalg.lstsq(H[:1024*(t_steps-1), :], u_t[:1024*(t_steps-1), :]).solution.detach()
                 l_eq = F.mse_loss(H@(self.coeff_buffer), u_t)
             else:
                 param0 = self.param0.detach()
@@ -254,6 +255,9 @@ pinn = RobustPINN(model=model, loss_fn=mod,
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
 
+saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
+saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+
 if state == 0:
     pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
 elif state == 1:
@@ -265,7 +269,7 @@ pinn = RobustPINN(model=pinn.model, loss_fn=mod,
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
-pinn = load_weights(pinn, "./weights/final/deephpm_KS_chaotic_nodft_learnedcoeffs_last_cleanall.pth")
+pinn = load_weights(pinn, saved_last_weights)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -287,7 +291,7 @@ def closure1():
         optimizer1.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
     # print(losses)
-    l = 0*(losses[0])+(losses[1])
+    l = (1-WWW)*(losses[0])+(WWW)*(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -296,7 +300,7 @@ def closure2():
     if torch.is_grad_enabled():
         optimizer2.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = (0)*(losses[0])+(losses[1])
+    l = (1-WWW)*(losses[0])+(WWW)*(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -304,13 +308,10 @@ def closure2():
 epochs1, epochs2 = 20, 20
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=5e-2, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 if state == 0: 
-    epochs1, epochs2 = 20, 1
-    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(100*1.25), history_size=500, line_search_fn='strong_wolfe')
-# optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
-pinn.train(); best_loss = 1e6
-saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
-saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+    epochs1, epochs2 = 10, 1
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
 
+pinn.train(); best_loss = 1e6
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -327,18 +328,12 @@ if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-# save(pinn, saved_last_weights)
 
 if epochs2 > 0:
-#    pinn = RobustPINN(model=pinn.model, loss_fn=mod,
-#                      index2features=feature_names, scale=True, lb=lb, ub=ub,
-#                      pretrained=True, noiseless_mode=noiseless_mode,
-#                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
     pinn.set_learnable_coeffs(False)
-
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
     if state == 0:
-        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=int(1000), history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
@@ -355,4 +350,4 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, "./weights/final/tmp.pth")
+save(pinn, f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x20_last_{name}.pth")
