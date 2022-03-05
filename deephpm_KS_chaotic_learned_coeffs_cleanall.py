@@ -287,7 +287,7 @@ def closure1():
         optimizer1.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
     # print(losses)
-    l = ((1-WWW)*losses[0])+(WWW*losses[1])
+    l = 0*(losses[0])+(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -296,13 +296,13 @@ def closure2():
     if torch.is_grad_enabled():
         optimizer2.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = ((1-WWW)*losses[0])+(WWW*losses[1])
+    l = (0)*(losses[0])+(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
 
 epochs1, epochs2 = 20, 20
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=5e-2, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 if state == 0: 
     epochs1, epochs2 = 20, 1
     optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(100*1.25), history_size=500, line_search_fn='strong_wolfe')
@@ -327,18 +327,18 @@ if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, saved_last_weights)
+# save(pinn, saved_last_weights)
 
 if epochs2 > 0:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod,
-                      index2features=feature_names, scale=True, lb=lb, ub=ub,
-                      pretrained=True, noiseless_mode=noiseless_mode,
-                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+#    pinn = RobustPINN(model=pinn.model, loss_fn=mod,
+#                      index2features=feature_names, scale=True, lb=lb, ub=ub,
+#                      pretrained=True, noiseless_mode=noiseless_mode,
+#                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
     pinn.set_learnable_coeffs(False)
 
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
     if state == 0:
-        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-2, line_search_fn='strong_wolfe')
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
@@ -355,4 +355,4 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-# if errs.mean() < 0.32: save(pinn, saved_last_weights)
+save(pinn, "./weights/final/tmp.pth")
