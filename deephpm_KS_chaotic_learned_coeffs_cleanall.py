@@ -186,7 +186,7 @@ class RobustPINN(nn.Module):
         if update_pde_params:
             if not self.learn:
                 H = cat(grads_dict["uf"]*grads_dict["u_x"], grads_dict["u_xx"], grads_dict["u_xxxx"])
-                self.coeff_buffer = torch.linalg.lstsq(H[:1024*(t_steps-1), :], u_t[:1024*(t_steps-1), :]).solution.detach()
+                self.coeff_buffer = torch.linalg.lstsq(H[:1024*(t_steps), :], u_t[:1024*(t_steps), :]).solution.detach()
                 l_eq = F.mse_loss(H@(self.coeff_buffer), u_t)
             else:
                 param0 = self.param0.detach()
@@ -350,4 +350,4 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x20_last_{name}.pth")
+save(pinn, f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}.pth")
