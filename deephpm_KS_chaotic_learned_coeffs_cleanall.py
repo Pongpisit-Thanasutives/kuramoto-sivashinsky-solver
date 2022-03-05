@@ -188,7 +188,10 @@ class RobustPINN(nn.Module):
                 self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach()
                 l_eq = F.mse_loss(H@(self.coeff_buffer), u_t)
             else:
-                u_t_pred = (self.param2*grads_dict["uf"]*grads_dict["u_x"])+(self.param1*grads_dict["u_xx"])+(self.param0*grads_dict["u_xxxx"])
+                param0 = self.param0.detach()
+                param1 = self.param1.detach()
+                param2 = self.param2.detach()
+                u_t_pred = (param2*grads_dict["uf"]*grads_dict["u_x"])+(param1*grads_dict["u_xx"])+(param0*grads_dict["u_xxxx"])
                 l_eq = F.mse_loss(u_t_pred, u_t)
             total_loss.append(l_eq)
             
@@ -262,6 +265,7 @@ pinn = RobustPINN(model=pinn.model, loss_fn=mod,
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+pinn = load_weights(pinn, "./weights/final/deephpm_KS_chaotic_nodft_learnedcoeffs_last_cleanall.pth")
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -276,7 +280,7 @@ X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
 WWW = 0.5
-if state == 0: WWW = 1e-1
+if state == 0: WWW = 5e-1
 
 def closure1():
     if torch.is_grad_enabled():
@@ -300,8 +304,8 @@ def closure2():
 epochs1, epochs2 = 20, 20
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 if state == 0: 
-    epochs1, epochs2 = 10, 0
-    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
+    epochs1, epochs2 = 20, 1
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(100*1.25), history_size=500, line_search_fn='strong_wolfe')
 # optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
 saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
@@ -323,29 +327,32 @@ if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
+save(pinn, saved_last_weights)
 
 if epochs2 > 0:
-#    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-#                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-#                      pretrained=True, noiseless_mode=noiseless_mode, 
-#                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
-#
-#    pinn.set_learnable_coeffs(False)
+    pinn = RobustPINN(model=pinn.model, loss_fn=mod,
+                      index2features=feature_names, scale=True, lb=lb, ub=ub,
+                      pretrained=True, noiseless_mode=noiseless_mode,
+                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+    pinn.set_learnable_coeffs(False)
+
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+    if state == 0:
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-2, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
         if (i % 10) == 0 or i == epochs2-1:
             l = closure2()
             print("Epoch {}: ".format(i), l.item())
-            pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
+            pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
             errs = 100*np.abs(pred_params+1)
             print(errs.mean(), errs.std())
 
-# save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
+# if errs.mean() < 0.32: save(pinn, saved_last_weights)

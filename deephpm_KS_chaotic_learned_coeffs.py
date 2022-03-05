@@ -342,4 +342,3 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-if errs.mean() < 3.9:  save(pinn, saved_last_weights)
