@@ -208,7 +208,7 @@ if state == 1:
 elif state == 2: 
 	key = 'noisy2_'
 	name = "noisy2"
-num_train_samples = 1000
+num_train_samples = 500
 pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
 semisup_model_state_dict = cpu_load(pretrained_weiights)
 parameters = OrderedDict()
@@ -301,7 +301,7 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-save_weights_at = f"./kdv_weights/kdv_{model_name}_learnedcoeffs_{name}.pth"
+save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
 
 epochs1, epochs2 = 30, 30
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
