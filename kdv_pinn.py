@@ -67,15 +67,15 @@ if noisy_labels:
 else: print("Clean labels")
 
 # Convert to torch.tensor
-X_train = to_tensor(X_train, True)
-u_train = to_tensor(u_train, False)
-X_star = to_tensor(X_star, True)
-u_star = to_tensor(u_star, False)
+X_train = to_tensor(X_train, True).to(device)
+u_train = to_tensor(u_train, False).to(device)
+X_star = to_tensor(X_star, True).to(device)
+u_star = to_tensor(u_star, False).to(device)
 
 # lb and ub are used in adversarial training
 scaling_factor = 1.0
-lb = scaling_factor*to_tensor(lb, False)
-ub = scaling_factor*to_tensor(ub, False)
+lb = scaling_factor*to_tensor(lb, False).to(device)
+ub = scaling_factor*to_tensor(ub, False).to(device)
 
 # Feature names
 feature_names=('uf', 'u_x', 'u_xx', 'u_xxx')
@@ -219,7 +219,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -227,7 +227,7 @@ print(model_name)
 pinn = RobustPINN(model=model, loss_fn=None, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(cs, cs), init_betas=(betas, betas), learnable_pde_coeffs=False)
+                  init_cs=(cs, cs), init_betas=(betas, betas), learnable_pde_coeffs=False).to(device)
 
 NUMBER = 128*421
 NUMBER = min(NUMBER, X_star.shape[0])
@@ -263,12 +263,13 @@ class PDEExpression(nn.Module):
     # Get a coeff
     def get_coeff(self, t): return self.diff_dict[t]
 
-mod = PDEExpression(terms, values); del pinn
+mod = PDEExpression(terms, values)
+del pinn, X_star, u_star
 
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=True)
+                  init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=True).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_train[:, 1:2], c=-5, return_real=True)
@@ -277,8 +278,6 @@ _, u_train_fft, u_train_PSD = fft1d_denoise(u_train, c=-5, return_real=True)
 u_train_fft, u_train_PSD = u_train_fft.to(device), u_train_PSD.to(device)
 x_fft, x_PSD = x_fft.detach().to(device), x_PSD.detach().to(device)
 t_fft, t_PSD = t_fft.detach().to(device), t_PSD.detach().to(device)
-X_train = X_train.to(device)
-u_train = u_train.to(device)
 
 def closure1():
     if torch.is_grad_enabled():
@@ -305,23 +304,24 @@ optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_ev
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
-	optimizer1.step(closure1)
-	if (i % 10) == 0 or i == epochs1-1:
-		l = closure1()
-		print("Epoch {}: ".format(i), l.item())
-		pred_params = np.array([pinn.param0.item(), pinn.param1.item()]); print(pred_params)
-		errs = 100*np.abs(npar([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
+    optimizer1.step(closure1)
+    if (i % 10) == 0 or i == epochs1-1:
+        l = closure1()
+        print("Epoch {}: ".format(i), l.item())
+        pred_params = np.array([pinn.param0.item(), pinn.param1.item()]); print(pred_params)
+        errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-	pinn.set_learnable_coeffs(False)
-	optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
-	print('2nd Phase')
-	for i in range(epochs2):
-		optimizer2.step(closure2)
-		if (i % 10) == 0 or i == epochs2-1:
-			l = closure2()
-			print("Epoch {}: ".format(i), l.item())
-			pred_params = np.array([pinn.param0.item(), pinn.param1.item()]); print(pred_params)
-			errs = 100*np.abs(npar([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
+    pinn.set_learnable_coeffs(False)
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
+    print('2nd Phase')
+    for i in range(epochs2):
+        optimizer2.step(closure2)
+        if (i % 10) == 0 or i == epochs2-1:
+            l = closure2()
+            print("Epoch {}: ".format(i), l.item())
+            pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
+            print(pred_params)
+            errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
 save(pinn, save_weights_at)
