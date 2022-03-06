@@ -37,7 +37,7 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-load_idx = False
+load_idx = True
 N = 20000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 if load_idx: 
@@ -51,7 +51,7 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 noise_intensity = 0.01
-noisy_xt, noisy_labels = True, True
+noisy_xt, noisy_labels = False, False
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     X_noise = perturb2d(X_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -220,7 +220,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -280,11 +280,14 @@ u_train_fft, u_train_PSD = u_train_fft.to(device), u_train_PSD.to(device)
 x_fft, x_PSD = x_fft.detach().to(device), x_PSD.detach().to(device)
 t_fft, t_PSD = t_fft.detach().to(device), t_PSD.detach().to(device)
 
+AAA = 1
+BBB = 1
+
 def closure1():
     if torch.is_grad_enabled():
         optimizer1.zero_grad()
     losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = sum(losses)
+    l = AAA*losses[0] + BBB*losses[1]
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -293,7 +296,7 @@ def closure2():
     if torch.is_grad_enabled():
         optimizer2.zero_grad()
     losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = sum(losses)
+    l = AAA*losses[0] + BBB*losses[1]
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -301,7 +304,7 @@ def closure2():
 save_weights_at = f"./kdv_weights/kdv_{model_name}_learnedcoeffs_{name}.pth"
 
 epochs1, epochs2 = 30, 30
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -314,7 +317,7 @@ for i in range(epochs1):
 
 if epochs2 > 0:
     pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
