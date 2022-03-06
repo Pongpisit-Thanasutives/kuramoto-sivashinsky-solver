@@ -208,7 +208,8 @@ if state == 1:
 elif state == 2: 
 	key = 'noisy2_'
 	name = "noisy2"
-pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_1000labeledsamples1000unlabeledsamples_tanhV2.pth"
+num_train_samples = 1000
+pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
 semisup_model_state_dict = cpu_load(pretrained_weiights)
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
