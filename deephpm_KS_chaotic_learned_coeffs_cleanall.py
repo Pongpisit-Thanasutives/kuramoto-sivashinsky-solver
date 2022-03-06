@@ -350,4 +350,4 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}.pth")
+# save(pinn, f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}.pth")
