@@ -125,7 +125,7 @@ optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_ev
 epochs = 600
 network.train()
 # weights_path = None
-weights_path = './burgers_weights/reproduced_pinn_noisy2_V2.pth'
+weights_path = './burgers_weights/reproduced_pinn_noisy1.pth'
 
 for i in range(epochs):    
     ### Add the closure function to calculate the gradient. For LBFGS.

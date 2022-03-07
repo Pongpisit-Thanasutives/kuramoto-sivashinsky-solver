@@ -41,11 +41,12 @@ load_idx = True
 N = 20000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 if load_idx: 
-	idx = np.load("./kdv_weights/idx.npy")
-	print("Loaded indices...")
+    idx = np.load("./kdv_weights/idx.npy")
+    print("Loaded indices...")
 else: 
-	np.save("./kdv_weights/idx.npy", idx)
-	print("Saved indices...")
+    np.save("./kdv_weights/idx.npy", idx)
+    print("Saved indices...")
+idx = np.sort(idx)
 X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
@@ -208,7 +209,7 @@ if state == 1:
 elif state == 2: 
 	key = 'noisy2_'
 	name = "noisy2"
-num_train_samples = 500
+num_train_samples = 1000
 pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
 semisup_model_state_dict = cpu_load(pretrained_weiights)
 parameters = OrderedDict()
@@ -328,4 +329,4 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-save(pinn, save_weights_at)
+# save(pinn, save_weights_at)
