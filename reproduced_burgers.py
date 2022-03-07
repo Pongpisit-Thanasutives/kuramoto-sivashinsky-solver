@@ -36,16 +36,17 @@ u_star = Exact.flatten()[:,None]
 lb = X_star.min(0)
 ub = X_star.max(0)
 
-force_save = True
+force_save = False
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 if force_save: 
     np.save("./burgers_weights/idx.npy", idx)
     print("Save indices...")
 else: 
-    idx = np.load("./burgers_weights/idx.npy")
-    print("Load indices...")
+    idx = np.load("./burgers_weights/idx2.npy")
+    print("Load indices V2...")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
+print(f"Training with {X_star.shape[0]} samples")
 
 noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if state == 0:
@@ -59,12 +60,12 @@ noise_intensity = 0.01
 if noisy_xt:
     X_noise = perturb2d(X_u_train, intensity=noise_intensity/np.sqrt(2), overwrite=False)
     if force_save: np.save("./burgers_weights/X_noise.npy", X_noise)
-    else: X_noise = np.load("./burgers_weights/X_noise.npy")
+    else: X_noise = np.load("./burgers_weights/X_noise2.npy")
     X_u_train = X_u_train + X_noise
 if noisy_labels:
     u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
     if force_save: np.save("./burgers_weights/u_noise.npy", u_noise)
-    else: u_noise = np.load("./burgers_weights/u_noise.npy")
+    else: u_noise = np.load("./burgers_weights/u_noise2.npy")
     u_train = u_train + u_noise
 
 class Network(nn.Module):
