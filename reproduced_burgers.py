@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-# In[ ]:
-
-
 import os
 import numpy as np
 import torch
@@ -20,16 +16,8 @@ from pyDOE import lhs
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from utils import *
 
-
-# In[ ]:
-
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print("Using", device)
-
-
-# In[ ]:
-
 
 data = io.loadmat('./data/burgers_shock.mat')
 
@@ -48,13 +36,33 @@ u_star = Exact.flatten()[:,None]
 lb = X_star.min(0)
 ub = X_star.max(0)
 
+force_save = True
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
+if force_save: 
+    np.save("./burger_weights/idx.npy", idx)
+    print("Save indices...")
+else: 
+    idx = np.load("./burger_weights/idx.npy")
+    print("Load indices...")
+noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+if state == 0:
+    name = "cleanall"
+elif state == 1:
+    name = "noisy1"
 noise_intensity = 0.01
-X_u_train = perturb2d(X_u_train, noise_intensity/np.sqrt(2))
-u_train = perturb(u_train, noise_intensity)
+if noisy_xt:
+    X_noise = perturb2d(X_u_train, intensity=noise_intensity/np.sqrt(2), overwrite=False)
+    if force_save: np.save("./burger_weights/X_noise.npy", X_noise)
+    else: X_noise = np.load("./burger_weights/X_noise.npy")
+    X_u_train = X_u_train + X_noise
+if noisy_labels:
+    u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
+    if force_save: np.save("./burger_weights/u_noise.npy", u_noise)
+    else: u_noise = np.load("./burger_weights/u_noise.npy")
+    u_train = u_train + u_noise
 
 class Network(nn.Module):
     def __init__(self, model):
@@ -93,10 +101,6 @@ class Network(nn.Module):
     def gradients(self, func, x):
         return grad(func, x, create_graph=True, retain_graph=True, grad_outputs=torch.ones(func.shape).to(device))
 
-
-# In[ ]:
-
-
 hidden_nodes = 50
 
 model = nn.Sequential(nn.Linear(2, hidden_nodes), 
@@ -111,10 +115,6 @@ model = nn.Sequential(nn.Linear(2, hidden_nodes),
 
 network = Network(model=model).to(device)
 
-
-# In[ ]:
-
-
 X_u_train = tensor(X_u_train).float().requires_grad_(True).to(device)
 u_train = tensor(u_train).float().requires_grad_(True).to(device)
 
@@ -125,7 +125,7 @@ optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_ev
 epochs = 600
 network.train()
 # weights_path = None
-weights_path = './burgers_weights/reproduced_pinn_noisy1.pth'
+weights_path = f'./burgers_weights/reproduced_pinn_{state}.pth'
 
 for i in range(epochs):    
     ### Add the closure function to calculate the gradient. For LBFGS.
@@ -145,22 +145,11 @@ for i in range(epochs):
     if (i % 100) == 0:
         print("Epoch {}: ".format(i), l.item())
 
-
-# In[ ]:
-
-
 if weights_path is not None:
     save(network, weights_path)
 
 
-# In[ ]:
-
-
 network.eval()
-
-
-# In[ ]:
-
 
 nu = 0.01 / np.pi
 
@@ -169,23 +158,10 @@ error_lambda_2 = np.abs(torch.exp(network.cpu().lambda_2).detach().item() - nu) 
 
 error_lambda_1, error_lambda_2
 
-
-# In[ ]:
-
-
 print(1.0, network.lambda_1.cpu().detach().item())
-
-
-# In[ ]:
-
 
 print(nu, torch.exp(network.lambda_2).cpu().detach().item())
 
-
-# In[ ]:
-
-
 errs = 100*np.array([np.abs(1.0-network.lambda_1.cpu().detach().item()), np.abs(nu-torch.exp(network.lambda_2).cpu().detach().item())/nu])
-
 
 print(errs.mean(), errs.std())
