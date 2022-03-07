@@ -46,9 +46,9 @@ else:
     print("Load indices V2...")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
-print(f"Training with {X_star.shape[0]} samples")
+print(f"Training with {X_u_train.shape[0]} samples")
 
-noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if state == 0:
     name = "cleanall"
 elif state == 1:
@@ -116,6 +116,9 @@ model = nn.Sequential(nn.Linear(2, hidden_nodes),
                         nn.Linear(hidden_nodes, hidden_nodes),
                         nn.Tanh(),
                         nn.Linear(hidden_nodes, 1))
+init_weights = "./burgers_weights/init_reproduced_pinn.pth"
+# save(model, init_weights)
+model = load_weights(model, init_weights)
 
 network = Network(model=model).to(device)
 
@@ -126,7 +129,9 @@ X_star = tensor(X_star).float().requires_grad_(True)
 u_star = tensor(u_star).float().requires_grad_(True)
 
 optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_eval=500, history_size=300, line_search_fn='strong_wolfe')
-epochs = 200
+if state == 0:
+    optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=10000, max_eval=10000, history_size=1000, line_search_fn='strong_wolfe')
+epochs = 300
 network.train()
 # weights_path = None
 weights_path = f'./burgers_weights/reproduced_pinn_{state}.pth'
