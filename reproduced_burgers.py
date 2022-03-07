@@ -21,7 +21,7 @@ print("Using", device)
 
 data = io.loadmat('./data/burgers_shock.mat')
 
-N = 10000
+N = 3000
 
 t = data['t'].flatten()[:,None]
 x = data['x'].flatten()[:,None]
@@ -38,30 +38,33 @@ ub = X_star.max(0)
 
 force_save = True
 idx = np.random.choice(X_star.shape[0], N, replace=False)
+if force_save: 
+    np.save("./burgers_weights/idx.npy", idx)
+    print("Save indices...")
+else: 
+    idx = np.load("./burgers_weights/idx.npy")
+    print("Load indices...")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-if force_save: 
-    np.save("./burger_weights/idx.npy", idx)
-    print("Save indices...")
-else: 
-    idx = np.load("./burger_weights/idx.npy")
-    print("Load indices...")
 noisy_xt = False; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if state == 0:
     name = "cleanall"
 elif state == 1:
     name = "noisy1"
+elif state == 2:
+    name = "noisy2"
+print(name)
 noise_intensity = 0.01
 if noisy_xt:
     X_noise = perturb2d(X_u_train, intensity=noise_intensity/np.sqrt(2), overwrite=False)
-    if force_save: np.save("./burger_weights/X_noise.npy", X_noise)
-    else: X_noise = np.load("./burger_weights/X_noise.npy")
+    if force_save: np.save("./burgers_weights/X_noise.npy", X_noise)
+    else: X_noise = np.load("./burgers_weights/X_noise.npy")
     X_u_train = X_u_train + X_noise
 if noisy_labels:
     u_noise = perturb(u_train, intensity=noise_intensity, overwrite=False)
-    if force_save: np.save("./burger_weights/u_noise.npy", u_noise)
-    else: u_noise = np.load("./burger_weights/u_noise.npy")
+    if force_save: np.save("./burgers_weights/u_noise.npy", u_noise)
+    else: u_noise = np.load("./burgers_weights/u_noise.npy")
     u_train = u_train + u_noise
 
 class Network(nn.Module):
@@ -122,7 +125,7 @@ X_star = tensor(X_star).float().requires_grad_(True)
 u_star = tensor(u_star).float().requires_grad_(True)
 
 optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_eval=500, history_size=300, line_search_fn='strong_wolfe')
-epochs = 600
+epochs = 200
 network.train()
 # weights_path = None
 weights_path = f'./burgers_weights/reproduced_pinn_{state}.pth'
