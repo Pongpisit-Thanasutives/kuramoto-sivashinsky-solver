@@ -25,8 +25,8 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = True; noisy_labels = True
-DENOISE = False
+noisy_xt = False; noisy_labels = False
+DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -48,7 +48,7 @@ X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None]))
 u_star = to_column_vector(Exact_u.T)
 v_star = to_column_vector(Exact_v.T)
 
-force_save = True
+force_save = False
 N = 2500
 N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -82,9 +82,9 @@ if noisy_labels:
     del v_noise, u_noise
 else: print("Clean labels")
 
-X_train = to_tensor(X_star, True).to(device)
-u_train = to_tensor(u_star, False).to(device)
-v_train = to_tensor(v_star, False).to(device)
+X_train = to_tensor(X_train, True).to(device)
+u_train = to_tensor(u_train, False).to(device)
+v_train = to_tensor(v_train, False).to(device)
 h_train = torch.complex(u_train, v_train).to(device)
 lb = to_tensor(lb, False).to(device)
 ub = to_tensor(ub, False).to(device)
@@ -136,7 +136,7 @@ class RobustComplexPINN(nn.Module):
             HS = cat(torch.fft.ifft(self.in_fft_nn(HS[1])*HS[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(HS[3])*HS[2]).real.reshape(-1, 1))
             HS = HL-HS
-            H = self.inp_rpca(HL, HS, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
+            H = self.inp_rpca(HL, HS, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
@@ -159,7 +159,8 @@ class RobustComplexPINN(nn.Module):
                 # self.coeff_buffer = self.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
             else: 
                 H = cat(grads_dict['X0']*grads_dict['X1'], grads_dict['X2'])
-                self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach()
+                # self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach() -> error: autodiff on complex numbers
+                self.coeff_buffer = torch.linalg.lstsq(H.detach(), u_t.detach()).solution
                 eq_loss = complex_mse(H@self.coeff_buffer, u_t)
             total_loss.append(eq_loss)
             
@@ -284,10 +285,12 @@ pinn = RobustComplexPINN(model=complex_model, loss_fn=mod,
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
                          init_cs=(1e-1, 1e-1), init_betas=(1e-5, 1e-5)).to(device)
 
-save_weights_at = f"./nls_weights/new/nls_{dft_tag}_{tag}.pth"
+save_weights_at1 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt1.pth"
+save_weights_at2 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt2.pth"
+
 grounds = np.array([1j, 0+0.5j])
 
-epochs1, epochs2 = 0, 30
+epochs1, epochs2 = 60, 30
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -297,17 +300,21 @@ for i in range(epochs1):
         l = closure1()
         print("Epoch {}: ".format(i), l.item())
         pred_params = pinn.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
+        print(pred_params)
         errs = []
         for i in range(len(grounds)):
-            # Relative l1 error
+            # Relative l2 error
             err = pred_params[i]-grounds[i]
-            errs.append(100*(abs(err.real+1j*err.imag)/abs(grounds[i].imag)))
+            errs.append(100*(abs(err.real+1j*err.imag)/abs(grounds[i])))
         errs = np.array(errs)
         print(errs.mean(), errs.std())
+
+save(pinn, save_weights_at1)
 
 if epochs2 > 0:
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=500, line_search_fn='strong_wolfe')
+    # optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
@@ -315,12 +322,13 @@ if epochs2 > 0:
             l = closure2()
             print("Epoch {}: ".format(i), l.item())
             pred_params = pinn.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
+            print(pred_params)
             errs = []
             for i in range(len(grounds)):
-                # Relative l1 error
+                # Relative l2 error
                 err = pred_params[i]-grounds[i]
-                errs.append(100*(abs(err.real+1j*err.imag)/abs(grounds[i].imag)))
+                errs.append(100*(abs(err.real+1j*err.imag)/abs(grounds[i])))
             errs = np.array(errs)
             print(errs.mean(), errs.std())
 
-save(pinn, save_weights_at)
+save(pinn, save_weights_at2)
