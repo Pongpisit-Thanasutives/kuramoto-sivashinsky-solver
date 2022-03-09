@@ -283,7 +283,7 @@ del predictions, h, h_x, h_xx, abs_h
 
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=False, lb=lb, ub=ub, 
-                         init_cs=(1e-1, 1e-1), init_betas=(1e-5, 1e-5)).to(device)
+                         init_cs=(5e-1, 5e-1), init_betas=(1e-5, 1e-5)).to(device)
 
 save_weights_at1 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt1.pth"
 save_weights_at2 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt2.pth"
@@ -291,7 +291,7 @@ save_weights_at2 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt2.pth"
 grounds = np.array([1j, 0+0.5j])
 
 epochs1, epochs2 = 60, 30
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=500, history_size=1000, line_search_fn='strong_wolfe')
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -313,7 +313,7 @@ save(pinn, save_weights_at1)
 
 if epochs2 > 0:
     pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=500, line_search_fn='strong_wolfe')
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
     # optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
