@@ -42,13 +42,15 @@ else: idx = np.load("./weights/final/idx.npy")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01
+noise_intensity = 0.01; double = 1
+double = int(double)
 noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
     if force_save: np.save("./weights/final/X_noise.npy", X_noise)
     else: X_noise = np.load("./weights/final/X_noise.npy")
+    X_noise = X_noise * double
     X_u_train = X_u_train + X_noise
 else: print("Clean (x, t)")
 if noisy_labels: 
@@ -56,6 +58,7 @@ if noisy_labels:
     u_noise = perturb(u_train, noise_intensity, overwrite=False)
     if force_save: np.save("./weights/final/u_noise.npy", u_noise)
     else: u_noise = np.load("./weights/final/u_noise.npy")
+    u_noise = u_noise * double
     u_train = u_train + u_noise
 else: print("Clean labels")
 
@@ -301,8 +304,7 @@ epochs1, epochs2 = 20, 20
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
-saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+saved_last_weights = f"./weights/final/more_noise/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
 
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -336,7 +338,7 @@ if epochs2 > 0:
             pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
 
-# save(pinn, saved_last_weights)
+save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
