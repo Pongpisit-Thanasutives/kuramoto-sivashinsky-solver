@@ -25,7 +25,7 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
 DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
@@ -291,7 +291,7 @@ save_weights_at2 = f"./nls_weights/new/nls_{dft_tag}_{tag}_opt2.pth"
 grounds = np.array([1j, 0+0.5j])
 
 epochs1, epochs2 = 60, 30
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=500, line_search_fn='strong_wolfe')
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=500, history_size=1000, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
