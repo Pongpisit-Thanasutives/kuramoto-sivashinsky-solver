@@ -564,6 +564,6 @@ class RobustPCANN(nn.Module):
             corr = (corr-corr.mean())/corr.std()
         if normalize: 
             corr = (1e-2)*corr
-        if is_clamp: beta = torch.clamp(self.beta, min=-1.0, max=1.0)
+        if is_clamp: beta = torch.clamp(self.beta, min=is_clamp[0], max=is_clamp[1])
         else: beta = self.beta
         return beta*corr

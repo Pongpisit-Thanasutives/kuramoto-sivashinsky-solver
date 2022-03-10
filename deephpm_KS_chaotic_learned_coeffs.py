@@ -1,4 +1,5 @@
 # coding: utf-8
+import random; random.seed(0)
 import torch; device = torch.device("cuda"); print(device)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
@@ -42,8 +43,9 @@ else: idx = np.load("./weights/final/idx.npy")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01; double = 1
+noise_intensity = 0.01; double = 2
 double = int(double)
+print(f"double = {double}")
 noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
@@ -90,10 +92,12 @@ if state == 0:
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
+    if double > 1: program = [-random.uniform(0, 1)*(1e-6) for _ in range(3)]
     name = "noisy2"
     print(X_noise.max(), X_noise.min())
 elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
+    if double > 1: program = [-random.uniform(0, 1)*(1e-6) for _ in range(3)]
     name = "noisy1"
 program = f'''
 {program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
@@ -169,12 +173,16 @@ class RobustPINN(nn.Module):
                                 torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
             X_input_noise = X_input-X_input_noise
             # X_input_noise = X_noise_wiener
-            X_input = self.inp_rpca(X_input, X_input_noise, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
+            # Work for high noise
+            # X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=True, axis=0, apply_tanh=False)
+            X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
             y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
             # y_input_noise = u_noise_wiener
-            y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
+            # Work for high noise
+            # y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=True, axis=None, apply_tanh=False)
+            y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
         
@@ -251,8 +259,7 @@ model.load_state_dict(parameters)
 
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                  pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+                  pretrained=True, noiseless_mode=noiseless_mode)
 
 if state == 0:
     pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
@@ -264,7 +271,7 @@ elif state == 2:
 pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+                  init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-2)).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -322,10 +329,11 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                      pretrained=True, noiseless_mode=noiseless_mode, 
-                      init_cs=(0.5, 0.5), init_betas=(1e-3, 1e-3)).to(device)
+    if not noiseless_mode:
+        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                          pretrained=True, noiseless_mode=noiseless_mode, 
+                          init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-2)).to(device)
 
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')

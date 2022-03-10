@@ -1,1 +1,1 @@
-vim deephpm_KS_chaotic_fixed_coeffs.py
+vim deephpm_KS_chaotic_learned_coeffs.py
