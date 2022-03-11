@@ -43,7 +43,7 @@ else: idx = np.load("./weights/final/idx.npy")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01; double = 2
+noise_intensity = 0.01; double = 10
 double = int(double)
 print(f"double = {double}")
 noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
@@ -271,7 +271,7 @@ elif state == 2:
 pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-2)).to(device)
+                  init_cs=(0.1, 0.1), init_betas=(1e-2, 1e-2)).to(device)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -333,7 +333,7 @@ if epochs2 > 0:
         pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
                           index2features=feature_names, scale=True, lb=lb, ub=ub, 
                           pretrained=True, noiseless_mode=noiseless_mode, 
-                          init_cs=(0.5, 0.5), init_betas=(1e-2, 1e-2)).to(device)
+                          init_cs=(0.1, 0.1), init_betas=(1e-2, 1e-2)).to(device)
 
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
