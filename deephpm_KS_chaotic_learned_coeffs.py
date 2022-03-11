@@ -169,11 +169,13 @@ class RobustPINN(nn.Module):
                                 torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
             X_input_noise = X_input-X_input_noise
             # X_input_noise = X_noise_wiener
+            # Here, since beta is in (0, 1), clamping or not does not matter. They yield the same effect.
             X_input = self.inp_rpca(X_input, X_input_noise, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
             y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
             # y_input_noise = u_noise_wiener
+            # Here, since beta is in (0, 1), clamping or not does not matter. They yield the same effect.
             y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
