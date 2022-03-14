@@ -42,6 +42,8 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
+REG = 1e-2
+
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
 noisy_xt = False; noisy_labels = False
@@ -147,7 +149,7 @@ class Network(nn.Module):
         return 2*(inp-self.lb)/(self.ub-self.lb)-1
 
 class AttentionSelectorNetwork(nn.Module):
-    def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=5e-6):
+    def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG):
         super(AttentionSelectorNetwork, self).__init__()
         # Nonlinear model, Training with PDE reg.
         assert len(layers) > 1
@@ -162,7 +164,7 @@ class AttentionSelectorNetwork(nn.Module):
         self.reg_intensity = reg_intensity
 #         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 10.0, 1.0]).to(device)
 #         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0]).to(device)
-        self.w = (1e-2)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0, 5.0]).to(device)
+        self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0, 5.0]).to(device)
         self.al = ApproxL0(sig=1.0)
         self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
@@ -207,6 +209,7 @@ class SemiSupModel(nn.Module):
 
 lets_pretrain = True
 pretrained_weights = "./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth"
+# pretrained_weights = None
 semisup_model = SemiSupModel(network=Network(
                                     model=TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1],
                                                    # activation_function=nn.Tanh(),
@@ -243,23 +246,6 @@ def pcgrad_closure(return_list=False):
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
 optimizer.param_groups[1]['lr'] = 5e-3
-
-# Use ~idx to sample adversarial data points
-for i in range(900):
-    semisup_model.train()
-    optimizer.step(pcgrad_closure)
-    loss = pcgrad_closure(return_list=True)
-    if i == 0:
-        semisup_model.selector.th = min(0.8*semisup_model.selector.latest_weighted_features.cpu().min().item(), 1/len(feature_names))
-        print(semisup_model.selector.th)
-    if i%25==0:
-        print(semisup_model.selector.latest_weighted_features.cpu().detach().numpy())
-        print(loss)
-
-feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
-old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
-feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
-print(feature_importance)
 
 if lets_pretrain:
     print("Pretraining")
@@ -301,6 +287,26 @@ if lets_pretrain:
     # If there is the best_state_dict
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
+semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init.pth")
+# torch.save(semisup_model.state_dict(), "./lambda_study/take2/init.pth")
+
+# Use ~idx to sample adversarial data points
+for i in range(300):
+    semisup_model.train()
+    optimizer.step(pcgrad_closure)
+    loss = pcgrad_closure(return_list=True)
+    if i == 0:
+        semisup_model.selector.th = min(0.8*semisup_model.selector.latest_weighted_features.cpu().min().item(), 1/len(feature_names))
+        semisup_model.selector.th = 0.1
+        print(semisup_model.selector.th)
+    if i%25==0:
+        print(semisup_model.selector.latest_weighted_features.cpu().detach().numpy())
+        print(loss)
+
+feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
 print(feature_importance)
-# print("Saving trained weights...")
-# torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-6_ep1_V3.pth")
+old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
+feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
+print(feature_importance)
+print("Saving trained weights...")
+torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}.pth")
