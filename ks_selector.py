@@ -33,7 +33,7 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-N = 1024*30
+N = 1024*21
 # N = 30000
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
@@ -44,7 +44,7 @@ print("Training with", N, "samples")
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = False; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 if noisy_xt and noise_intensity_xt > 0.0:
     print("Noisy X_train")
     X_train = perturb2d(X_train, noise_intensity_xt)
@@ -79,7 +79,7 @@ lb = scaling_factor*to_tensor(lb, False).to(device)
 ub = scaling_factor*to_tensor(ub, False).to(device)
 
 # Feature names
-feature_names=('uf', 'u_x', 'u_xx', 'u_xxx', 'u_xxxx')
+feature_names=('uf', 'u_x', 'u_xx', 'u_xxx', 'u_xxxx', 'u_xxxxxx')
 
 class ApproxL0(nn.Module):
     def __init__(self, sig=1.0, minmax=(0.0, 10.0), trainable=True):
@@ -129,14 +129,14 @@ class Network(nn.Module):
         u_xx = self.gradients(u_x, x)[0]
         u_xxx = self.gradients(u_xx, x)[0]
         u_xxxx = self.gradients(u_xxx, x)[0]
-        # u_xxxxx = self.gradients(u_xxxx, x)[0]
+        u_xxxxx = self.gradients(u_xxxx, x)[0]
         derivatives = []
         derivatives.append(uf)
         derivatives.append(u_x)
         derivatives.append(u_xx)
         derivatives.append(u_xxx)
         derivatives.append(u_xxxx)
-        # derivatives.append(u_xxxxx)
+        derivatives.append(u_xxxxx)
         
         return torch.cat(derivatives, dim=1), u_t
     
@@ -162,7 +162,7 @@ class AttentionSelectorNetwork(nn.Module):
         self.reg_intensity = reg_intensity
 #         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 10.0, 1.0]).to(device)
 #         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0]).to(device)
-        self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0]).to(device)
+        self.w = (1e-2)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0, 5.0]).to(device)
         self.al = ApproxL0(sig=1.0)
         self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
@@ -301,5 +301,6 @@ if lets_pretrain:
     # If there is the best_state_dict
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
-print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-6_ep1_V3.pth")
+print(feature_importance)
+# print("Saving trained weights...")
+# torch.save(semisup_model.state_dict(), "./lambda_study/rudy_KS_cleanall_chaotic_lambda1e-6_ep1_V3.pth")

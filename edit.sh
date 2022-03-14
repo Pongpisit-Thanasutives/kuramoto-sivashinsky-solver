@@ -1,1 +1,1 @@
-vim deephpm_KS_chaotic_learned_coeffs_more_noise.py
+vim ks_selector.py
