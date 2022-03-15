@@ -42,7 +42,7 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
-REG = 1e-4
+REG = 1e-2
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
@@ -57,7 +57,7 @@ if noisy_labels and noise_intensity_labels > 0.0:
 else: print("Clean u_train")
 
 # Unsup data
-include_N_res = True
+include_N_res = False
 if include_N_res:
     N_res = N//2
     idx_res = np.array(range(X_star.shape[0]-1))[~idx]
