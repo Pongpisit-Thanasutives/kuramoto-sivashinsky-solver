@@ -31,9 +31,14 @@ X_star, u_star = get_trainable_data(X_sol, T_sol, Exact)
 ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
-# For identification
-N = 100000
+N = 80000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
+np.save("./loss_plots/idx.npy", idx)
+# idx = np.load("./loss_plots/idx.npy")
+
+#N = 20000
+#idx = np.arange(N)
+
 X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
@@ -59,10 +64,10 @@ elif state == 2: name = "noisy2"
 model_path = f"./loss_plots/{name}_100000.pth"
 
 # Unsup data
-include_N_res = True
+include_N_res = False
 if include_N_res:
     N_res = N//2
-    idx_res = np.array(range(X_star.shape[0]-1))[~idx]
+    idx_res = np.array(range(X_star.shape[0]))[~idx]
     idx_res = np.random.choice(idx_res.shape[0], N_res, replace=True)
     X_res = X_star[idx_res, :]
     print(f"Training with {N_res} unsup samples")
@@ -83,7 +88,7 @@ lb = scaling_factor*to_tensor(lb, False).to(device)
 ub = scaling_factor*to_tensor(ub, False).to(device)
 
 # Feature names
-feature_names=('uf', 'u_x', 'u_xx', 'u_xxx', 'u_xxxx', 'u_xxxxxx')
+feature_names=('uf', 'u_x', 'u_xx', 'u_xxx', 'u_xxxx')
 
 class ApproxL0(nn.Module):
     def __init__(self, sig=1.0, minmax=(0.0, 10.0), trainable=True):
@@ -133,14 +138,14 @@ class Network(nn.Module):
         u_xx = self.gradients(u_x, x)[0]
         u_xxx = self.gradients(u_xx, x)[0]
         u_xxxx = self.gradients(u_xxx, x)[0]
-        u_xxxxx = self.gradients(u_xxxx, x)[0]
+        # u_xxxxx = self.gradients(u_xxxx, x)[0]
         derivatives = []
         derivatives.append(uf)
         derivatives.append(u_x)
         derivatives.append(u_xx)
         derivatives.append(u_xxx)
         derivatives.append(u_xxxx)
-        derivatives.append(u_xxxxx)
+        # derivatives.append(u_xxxxx)
         
         return torch.cat(derivatives, dim=1), u_t
     
@@ -164,7 +169,7 @@ class AttentionSelectorNetwork(nn.Module):
         self.latest_weighted_features = None
         self.th = (1/layers[0])-(1e-10)
         self.reg_intensity = reg_intensity
-        self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0, 5.0]).to(device)
+        self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0]).to(device)
         self.al = ApproxL0(sig=1.0)
         self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
@@ -206,7 +211,6 @@ class SemiSupModel(nn.Module):
         unsup_loss = self.selector.loss(X_selector, y_selector)
         return self.network.uf, unsup_loss
 
-lets_pretrain = True
 semisup_model = SemiSupModel(network=Network(
                                     model=TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1],
                                                    bn=nn.LayerNorm, dropout=None),
@@ -217,6 +221,11 @@ semisup_model = SemiSupModel(network=Network(
                             maxi=None)
 
 semisup_model = semisup_model.to(device)
+
+semisup_model = load_weights(semisup_model, model_path)
+referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
+semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
 
 def pcgrad_closure(return_list=False):
     global N, X_train, u_train
@@ -229,11 +238,12 @@ def pcgrad_closure(return_list=False):
     if not return_list: return loss
     else: return losses
 
+lets_pretrain = False
 if lets_pretrain:
     print("Pretraining")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(), 
-                                     lr=1e-1, max_iter=500, 
-                                     max_eval=int(500*1.25), history_size=300, 
+                                     lr=1e-1, max_iter=1000, 
+                                     max_eval=1000*1.25, history_size=1000, 
                                      line_search_fn=True, batch_mode=False)
     
     best_state_dict = None; best_loss = 1000
@@ -296,11 +306,12 @@ feature_importance = np.where(feature_importance<old_th, feature_importance+diff
 print(feature_importance)
 
 # Converge (only converge solver network for the simplicity since the models weights are used solely for the loss plotting)
+lets_pretrain = True
 if lets_pretrain:
-    print("Pretraining")
+    print("Converging")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(), 
-                                     lr=1e-1, max_iter=500, 
-                                     max_eval=int(500*1.25), history_size=300, 
+                                     lr=1e-1, max_iter=1000, 
+                                     max_eval=1000*1.25, history_size=1000, 
                                      line_search_fn=True, batch_mode=False)
     
     best_state_dict = None; best_loss = 1000
