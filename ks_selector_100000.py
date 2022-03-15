@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os
+import os; from os.path import exists
 from glob import glob
 
 from utils import *
@@ -33,8 +33,8 @@ lb = X_star.min(axis=0)
 
 N = 80000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-np.save("./loss_plots/idx.npy", idx)
-# idx = np.load("./loss_plots/idx.npy")
+# np.save("./loss_plots/idx.npy", idx)
+idx = np.load("./loss_plots/idx.npy")
 
 #N = 20000
 #idx = np.arange(N)
@@ -47,14 +47,22 @@ REG = 1e-3
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
+X_noise_path = "./loss_plots/X_noise.npy"
+u_noise_path = "./loss_plots/u_noise.npy"
 if noisy_xt and noise_intensity_xt > 0.0:
     print("Noisy X_train")
-    X_train = perturb2d(X_train, noise_intensity_xt)
+    X_noise = perturb2d(X_train, noise_intensity_xt, overwrite=False)
+    if exists(X_noise_path): X_noise = np.load(X_noise_path)
+    else: np.save(X_noise_path, X_noise)
+    X_train = X_train + X_noise
 else: print("Clean X_train")
 if noisy_labels and noise_intensity_labels > 0.0:
     print("Noisy u_train")
-    u_train = perturb(u_train, noise_intensity_labels)
+    u_noise = perturb(u_train, noise_intensity_labels, overwrite=False)
+    if exists(u_noise_path): u_noise = np.load(u_noise_path)
+    else: np.save(u_noise_path, u_noise)
+    u_train = u_train + u_noise
 else: print("Clean u_train")
 
 state = int(noisy_xt)+int(noisy_labels)
@@ -221,7 +229,6 @@ semisup_model = SemiSupModel(network=Network(
                             maxi=None)
 
 semisup_model = semisup_model.to(device)
-
 semisup_model = load_weights(semisup_model, model_path)
 referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
 semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
@@ -238,7 +245,7 @@ def pcgrad_closure(return_list=False):
     if not return_list: return loss
     else: return losses
 
-lets_pretrain = False
+lets_pretrain = True
 if lets_pretrain:
     print("Pretraining")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(), 
