@@ -229,10 +229,10 @@ semisup_model = SemiSupModel(network=Network(
                             maxi=None)
 
 semisup_model = semisup_model.to(device)
-semisup_model = load_weights(semisup_model, model_path)
-referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
-semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
-semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+#semisup_model = load_weights(semisup_model, model_path)
+#referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
+#semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+#semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
 
 def pcgrad_closure(return_list=False):
     global N, X_train, u_train
@@ -276,6 +276,7 @@ if lets_pretrain:
             semisup_model.network.eval()
             test_performance = F.mse_loss(semisup_model.network(*dimension_slicing(X_star)).detach(), u_star).item()
             if test_performance < best_loss:
+                best_loss = test_performance
                 best_state_dict = semisup_model.state_dict()
                 torch.save(best_state_dict, model_path)
                 print("Saved weights")
@@ -344,6 +345,7 @@ if lets_pretrain:
             semisup_model.network.eval()
             test_performance = F.mse_loss(semisup_model.network(*dimension_slicing(X_star)).detach(), u_star).item()
             if test_performance < best_loss:
+                best_loss = test_performance
                 best_state_dict = semisup_model.state_dict()
                 torch.save(best_state_dict, model_path)
                 print("Saved weights")
