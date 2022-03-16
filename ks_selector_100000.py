@@ -47,7 +47,7 @@ REG = 1e-3
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = False; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 X_noise_path = "./loss_plots/X_noise.npy"
 u_noise_path = "./loss_plots/u_noise.npy"
 if noisy_xt and noise_intensity_xt > 0.0:
