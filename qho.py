@@ -74,7 +74,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noisy_xt = False; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 noise_intensity = 0.01/np.sqrt(2)
 if noisy_xt:
     X_train = perturb2d(X_train, noise_intensity)
@@ -189,7 +189,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1 + 2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 3e-2
+REG_INTENSITY = 2e-2
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -314,7 +314,7 @@ def pcgrad_closure(return_list=False):
     if not return_list: return loss
     else: return fd_guidance, unsup_loss
 
-save(semisup_model, f"./qho_weights/pretrained_noisy1_semisup_model_lambda1_{REG_INTENSITY}.pth")
+save(semisup_model, f"./qho_weights/pretrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
 
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
@@ -358,4 +358,4 @@ feature_importance = np.where(feature_importance<old_th, feature_importance+diff
 print(semisup_model.selector.th)
 print(feature_importance)
 
-save(semisup_model, f"./qho_weights/jointtrained_noisy1_semisup_model_lambda1_{REG_INTENSITY}.pth")
+save(semisup_model, f"./qho_weights/jointtrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
