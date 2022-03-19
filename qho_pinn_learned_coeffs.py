@@ -3,7 +3,7 @@ import torch
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
 
-import os; from os import exists
+import os; from os.path import exists
 from collections import OrderedDict
 from scipy import io
 from utils import *
@@ -80,7 +80,7 @@ v_train = np.imag(h_train)
 V = potential[idx, :]
 
 # adding noise
-denoise = False
+denoise = True
 if denoise:
     modelname = "dft"
 else:
@@ -164,16 +164,19 @@ del noise_x, noise_t
 mode = int(noisy_xt)+int(noisy_labels)
 
 if mode == 0:
-    cn1 = (-0.002272 -0.999772*1j)
-    cn2 = (-0.000547 +0.499581*1j)
+    cn1 = (-0.002272-0.999772*1j)
+    cn2 = (-0.000547+0.499581*1j)
+    # new
+    cn1 = (-0.001970-1.000545*1j)
+    cn2 = (-0.000233+0.499484*1j)
     name = "cleanall"
 elif mode == 1:
-    cn1 = (-0.002839 -0.998631*1j)
+    cn1 = (-0.002839-0.998631*1j)
     cn2 = (-0.000211+0.499448*1j)
     name = "noisy1"
 elif mode == 2:
-    cn1 = (-0.002149 -0.996097*1j)
-    cn2 = (-0.000531 +0.497700*1j)
+    cn1 = (-0.002149-0.996097*1j)
+    cn2 = (-0.000531+0.497700*1j)
     name = "noisy2"
     
 cns = [cn1, cn2]
@@ -327,7 +330,8 @@ if mode == 2:
 elif mode == 1:
     semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_noisy1_semisup_model_lambda1_0.03.pth")
 elif mode == 0:
-    semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_semisup_model_lambda1_0.03_work.pth")
+    # semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_semisup_model_lambda1_0.03_work.pth")
+    semisup_model_state_dict = cpu_load("./qho_weights/jointtrained_semisup_model_lambda1_0.02.pth")
 
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
@@ -339,7 +343,7 @@ complex_model.load_state_dict(parameters)
 
 pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_names, 
                    scale=True, lb=lb, ub=ub, 
-                   init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
+                   init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
 
 pinn.param0_real.requires_grad_(True)
 pinn.param0_imag.requires_grad_(True)
@@ -365,8 +369,10 @@ x_fft, x_PSD = (x_fft).to(device), (x_PSD).to(device)
 t_fft, t_PSD = (t_fft).to(device), (t_PSD).to(device)
 h_train_fft, h_train_PSD = (h_train_fft).to(device), (h_train_PSD).to(device)
 
-epochs1, epochs2 = 0, 100
-optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=int(1000*1.25), history_size=1000, line_search_fn='strong_wolfe')
+epochs1, epochs2 = 0, 200
+if mode > 0: optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
+else: optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=300, max_eval=int(300*1.25), history_size=150, line_search_fn='strong_wolfe')
+
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
     optimizer2.step(closure)
@@ -374,10 +380,10 @@ for i in range(epochs2):
     if (i % 5) == 0 or i == epochs2-1:
         print("Epoch {}: ".format(i), l.item())
 
-print(pinn.param0_real)
-print(pinn.param0_imag)
-print(pinn.param1_real)
-print(pinn.param1_imag)
+#print(pinn.param0_real)
+#print(pinn.param0_imag)
+#print(pinn.param1_real)
+#print(pinn.param1_imag)
 
 save(pinn, f"./qho_weights/pub/{name}_161x512_{modelname}_pinn_learned.pth")
 
@@ -388,3 +394,11 @@ true_norm = torch.sqrt(h_star.real**2 + h_star.imag**2).detach().cpu().numpy()
 pred_norm = pinn(X_star[:, 0:1], X_star[:, 1:2])
 pred_norm = torch.sqrt(pred_norm.real**2 + pred_norm.imag**2).detach().cpu().numpy()
 print("Test relative l2 error:", relative_l2_error(true_norm, pred_norm))
+
+g1, g2 = -1j, 0.5j
+est1 = pinn.param0_real.item() + 1j*pinn.param0_imag.item()
+est2 = pinn.param1_real.item() + 1j*pinn.param1_imag.item()
+errs = np.array([np.abs(est1-g1)/np.abs(g1), np.abs(est2-g2)/np.abs(g2)])*100
+print(est1)
+print(est2)
+print(errs.mean(), errs.std())
