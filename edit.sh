@@ -1,1 +1,1 @@
-vim qho.py
+vim qho_pinn_learned_coeffs.py.py

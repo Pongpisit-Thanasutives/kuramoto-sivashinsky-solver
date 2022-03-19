@@ -3,7 +3,7 @@ import torch
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
 
-import os
+import os; from os import exists
 from collections import OrderedDict
 from scipy import io
 from utils import *
@@ -55,9 +55,19 @@ potential = fn(potential)
 lb = X_star.min(axis=0)
 ub = X_star.max(axis=0)
 
-N = 10000 # N = X_star.shape[0] 
+force_save = False
+idx_path = "./qho_weights/pub/idx.npy"
+X_train_noise_path = "./qho_weights/pub/X_train_noise.npy"
+u_train_noise_path = "./qho_weights/pub/u_train_noise.npy"
+v_train_noise_path = "./qho_weights/pub/v_train_noise.npy"
+
+N = 30000 # N = X_star.shape[0] 
 N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
+if not force_save:
+    if exists(idx_path): idx = np.load(idx_path)
+    else: np.save(idx_path, idx)
+else: np.save(idx_path, idx)
 print("Training with", N, "samples...")
 
 lb = to_tensor(lb, False).to(device)
@@ -76,17 +86,39 @@ if denoise:
 else:
     modelname = "nodft"
 print(modelname)
+
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = False; noisy_labels = True
+noisy_xt = True; noisy_labels = True
+
 if noisy_labels:
-    u_train = perturb(u_train, noise_intensity)
-    v_train = perturb(v_train, noise_intensity)
+    u_train_noise = perturb(u_train, noise_intensity, overwrite=False)
+    v_train_noise = perturb(v_train, noise_intensity, overwrite=False)
+
+    if not force_save:
+        if exists(u_train_noise_path): u_train_noise = np.load(u_train_noise_path)
+        else: np.save(u_train_noise_path, u_train_noise)
+    else: np.save(u_train_noise_path, u_train_noise)
+
+    if not force_save:
+        if exists(v_train_noise_path): v_train_noise = np.load(v_train_noise_path)
+        else: np.save(v_train_noise_path, v_train_noise)
+    else: np.save(v_train_noise_path, v_train_noise)
+
+    u_train = u_train + u_train_noise
+    v_train = v_train + v_train_noise
     h_train = u_train+1j*v_train
-    # h_train = 
+
+    del u_train_noise, v_train_noise
     print("Noisy labels")
 else: print("Clean labels")
 if noisy_xt:
-    X_train = perturb2d(X_train, noise_intensity)
+    X_train_noise = perturb2d(X_train, noise_intensity, overwrite=False)
+    if not force_save:
+        if exists(X_train_noise_path): X_train_noise = np.load(X_train_noise_path)
+        else: np.save(X_train_noise_path, X_train_noise)
+    else: np.save(X_train_noise_path, X_train_noise)
+    X_train = X_train + X_train_noise
+    del X_train_noise
     print("Noisy (x, t)")
 else: print("Clean X_train")
 
@@ -221,13 +253,13 @@ class ComplexPINN(nn.Module):
             X_input_S = cat(torch.fft.ifft(self.in_fft_nn(X_input_S[1])*X_input_S[0]).real.reshape(-1, 1), 
                      torch.fft.ifft(self.in_fft_nn(X_input_S[3])*X_input_S[2]).real.reshape(-1, 1))
             X_input_S = X_input - X_input_S
-            X_input = self.inp_rpca(X_input, X_input_S, normalize=True)
+            X_input = self.inp_rpca(X_input, X_input_S, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
 
             # Denoising FFT on y_input
             y_input_S = y_input-torch.fft.ifft(self.out_fft_nn(y_input_S[1])*y_input_S[0]).reshape(-1, 1)
             y_input = self.out_rpca(cat(y_input.real, y_input.imag), 
                                     cat(y_input_S.real, y_input_S.imag), 
-                                    normalize=True)
+                                    normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             y_input = torch.complex(y_input[:, 0:1], y_input[:, 1:2])
         
         # Compute losses
@@ -306,7 +338,8 @@ for p in semisup_model_state_dict:
 complex_model.load_state_dict(parameters)
 
 pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_names, 
-                   scale=True, lb=lb, ub=ub).to(device)
+                   scale=True, lb=lb, ub=ub, 
+                   init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
 
 pinn.param0_real.requires_grad_(True)
 pinn.param0_imag.requires_grad_(True)
@@ -333,7 +366,7 @@ t_fft, t_PSD = (t_fft).to(device), (t_PSD).to(device)
 h_train_fft, h_train_PSD = (h_train_fft).to(device), (h_train_PSD).to(device)
 
 epochs1, epochs2 = 0, 100
-optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
+optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=int(1000*1.25), history_size=1000, line_search_fn='strong_wolfe')
 print('2nd Phase optimization using LBFGS')
 for i in range(epochs2):
     optimizer2.step(closure)
@@ -346,7 +379,7 @@ print(pinn.param0_imag)
 print(pinn.param1_real)
 print(pinn.param1_imag)
 
-save(pinn, f"./qho_weights/{name}_161x512_{modelname}_pinn_learned.pth")
+save(pinn, f"./qho_weights/pub/{name}_161x512_{modelname}_pinn_learned.pth")
 
 X_star, h_star = X_star.to(device), h_star.to(device)
 print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
