@@ -343,7 +343,7 @@ complex_model.load_state_dict(parameters)
 
 pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_names, 
                    scale=True, lb=lb, ub=ub, 
-                   init_cs=(0.1, 0.1), init_betas=(0.0, 0.0)).to(device)
+                   init_cs=(0.1, 0.1), init_betas=(-1e-5, 1e-5)).to(device)
 
 pinn.param0_real.requires_grad_(True)
 pinn.param0_imag.requires_grad_(True)
