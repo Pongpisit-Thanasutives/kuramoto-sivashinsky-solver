@@ -120,7 +120,7 @@ model = nn.Sequential(nn.Linear(2, hidden_nodes),
                         nn.Tanh(),
                         nn.Linear(hidden_nodes, 1))
 
-init_weights = "./burgers_weights/pub/init_reproduced_pinn.pth"
+init_weights = "./burgers_weights/init_reproduced_pinn.pth"
 # save(model, init_weights)
 model = load_weights(model, init_weights)
 
