@@ -48,7 +48,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 print(f"Training with {X_u_train.shape[0]} samples")
 
-noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if state == 0:
     name = "cleanall"
 elif state == 1:
@@ -74,8 +74,8 @@ class Network(nn.Module):
         self.model = model
         self.model.apply(self.xavier_init)
         self.lambda_1 = torch.nn.Parameter(torch.tensor([0.0]))
-        # self.lambda_2 = torch.nn.Parameter(torch.tensor([-7.0]))
-        self.lambda_2 = torch.nn.Parameter(torch.tensor([-6.0]))
+        # self.lambda_2 = torch.nn.Parameter(torch.tensor([-6.0]))
+        self.lambda_2 = torch.nn.Parameter(torch.tensor([-7.0]))
         
     def xavier_init(self, m):
         if type(m) == nn.Linear:
@@ -121,8 +121,8 @@ model = nn.Sequential(nn.Linear(2, hidden_nodes),
                         nn.Linear(hidden_nodes, 1))
 
 init_weights = "./burgers_weights/pub/init_reproduced_pinn.pth"
-save(model, init_weights)
-# model = load_weights(model, init_weights)
+# save(model, init_weights)
+model = load_weights(model, init_weights)
 
 network = Network(model=model).to(device)
 
