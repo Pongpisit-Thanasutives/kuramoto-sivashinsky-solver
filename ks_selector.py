@@ -34,7 +34,6 @@ lb = X_star.min(axis=0)
 
 # For identification
 N = 1024*21
-# N = 30000
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)

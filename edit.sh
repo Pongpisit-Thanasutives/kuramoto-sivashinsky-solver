@@ -1,1 +1,1 @@
-vim qho_pinn_learned_coeffs.py
+vim reproduced_burgers.py

@@ -48,7 +48,7 @@ X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 print(f"Training with {X_u_train.shape[0]} samples")
 
-noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
+noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
 if state == 0:
     name = "cleanall"
 elif state == 1:
@@ -74,6 +74,7 @@ class Network(nn.Module):
         self.model = model
         self.model.apply(self.xavier_init)
         self.lambda_1 = torch.nn.Parameter(torch.tensor([0.0]))
+        # self.lambda_2 = torch.nn.Parameter(torch.tensor([-7.0]))
         self.lambda_2 = torch.nn.Parameter(torch.tensor([-6.0]))
         
     def xavier_init(self, m):
@@ -115,10 +116,13 @@ model = nn.Sequential(nn.Linear(2, hidden_nodes),
                         nn.Tanh(), 
                         nn.Linear(hidden_nodes, hidden_nodes),
                         nn.Tanh(),
+                        nn.Linear(hidden_nodes, hidden_nodes),
+                        nn.Tanh(),
                         nn.Linear(hidden_nodes, 1))
-init_weights = "./burgers_weights/init_reproduced_pinn.pth"
-# save(model, init_weights)
-model = load_weights(model, init_weights)
+
+init_weights = "./burgers_weights/pub/init_reproduced_pinn.pth"
+save(model, init_weights)
+# model = load_weights(model, init_weights)
 
 network = Network(model=model).to(device)
 
@@ -128,9 +132,9 @@ u_train = tensor(u_train).float().requires_grad_(True).to(device)
 X_star = tensor(X_star).float().requires_grad_(True)
 u_star = tensor(u_star).float().requires_grad_(True)
 
-optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_eval=500, history_size=300, line_search_fn='strong_wolfe')
+optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=300, max_eval=300, history_size=150, line_search_fn='strong_wolfe')
 if state == 0:
-    optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=10000, max_eval=10000, history_size=1000, line_search_fn='strong_wolfe')
+    optimizer = torch.optim.LBFGS(network.parameters(), lr=0.1, max_iter=500, max_eval=500, history_size=300, line_search_fn='strong_wolfe')
 epochs = 300
 network.train()
 # weights_path = None
@@ -156,7 +160,6 @@ for i in range(epochs):
 
 if weights_path is not None:
     save(network, weights_path)
-
 
 network.eval()
 
