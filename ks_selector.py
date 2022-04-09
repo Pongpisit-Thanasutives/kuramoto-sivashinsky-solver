@@ -41,7 +41,7 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
-REG = 0 # 0, 1e-2
+REG = 1e-2 # 0, 1e-2
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
@@ -295,8 +295,8 @@ for i in range(300):
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
     if i == 0:
-        semisup_model.selector.th = min(0.8*semisup_model.selector.latest_weighted_features.cpu().min().item(), 1/len(feature_names))
-        # semisup_model.selector.th = 0.1
+        semisup_model.selector.th = min(0.8*semisup_model.selector.latest_weighted_features.cpu().min().item(), 1/len(feature_names)) # 0
+        semisup_model.selector.th = 0.1 # 1e-1, 1e-2, 1e-3
         print(semisup_model.selector.th)
     if i%25==0:
         print(semisup_model.selector.latest_weighted_features.cpu().detach().numpy())
@@ -308,4 +308,4 @@ old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
 feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
 print(feature_importance)
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_fixed_init.pth")
+torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}.pth")
