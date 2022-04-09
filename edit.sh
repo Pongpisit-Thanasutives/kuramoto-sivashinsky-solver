@@ -1,1 +1,1 @@
-vim reproduced_burgers.py
+vim ks_selector.py
