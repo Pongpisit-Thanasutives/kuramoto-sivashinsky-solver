@@ -42,8 +42,8 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
-# REG = 2e-2 # 0, 1e-2
-REG = 2e-3 # 0, 1e-2
+REG = 2e-2 # 0, 1e-2
+# REG = 2e-3 # 0, 1e-2
 # REG = 2e-4 # 0, 1e-2
 # REG = 0 # 0, 1e-2
 print(REG)
