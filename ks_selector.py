@@ -33,7 +33,8 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-N = 1024*21
+# N = 1024*21
+N = 30000
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -42,14 +43,14 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 # REG = 2e-2 # 0, 1e-2
-REG = 2e-3 # 0, 1e-2
-# REG = 2e-4 # 0, 1e-2
+# REG = 1e-3 # 0, 1e-2
+REG = 1e-4 # 0, 1e-2
 # REG = 0 # 0, 1e-2
 print(REG)
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 if noisy_xt and noise_intensity_xt > 0.0:
     print("Noisy X_train")
     X_train = perturb2d(X_train, noise_intensity_xt)
@@ -63,7 +64,7 @@ else: print("Clean u_train")
 include_N_res = True
 if include_N_res:
     N_res = N//2
-    idx_res = np.array(range(X_star.shape[0]-1))[~idx]
+    idx_res = np.array(range(X_star.shape[0]))[~idx]
     idx_res = np.random.choice(idx_res.shape[0], N_res, replace=True)
     X_res = X_star[idx_res, :]
     print(f"Training with {N_res} unsup samples")
@@ -177,7 +178,7 @@ class AttentionSelectorNetwork(nn.Module):
             m.bias.data.fill_(0.01)
         
     def forward(self, inn):
-        # return self.nonlinear_model(inn*(F.threshold(self.weighted_features(inn), self.th, 0.0)))
+        # return self.nonlinear_model((inn*(F.relu(self.weighted_features(inn)-self.th))))
         return self.nonlinear_model((inn*(F.relu(self.weighted_features(inn)-self.th)))*self.gamma)
     
     def weighted_features(self, inn):
@@ -248,7 +249,7 @@ def pcgrad_closure(return_list=False):
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
-optimizer.param_groups[1]['lr'] = 5e-3 # pub: 5e-3
+optimizer.param_groups[1]['lr'] = 1e-2 # pub: 5e-3
 
 if lets_pretrain:
     print("Pretraining")
@@ -295,8 +296,8 @@ if lets_pretrain:
     semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
     del referenced_derivatives
 
-# semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init.pth")
-# torch.save(semisup_model.state_dict(), "./lambda_study/take2/init.pth")
+semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init_20220412.pth")
+# torch.save(semisup_model.state_dict(), "./lambda_study/take2/init_20220412.pth")
 
 # Use ~idx to sample adversarial data points
 epochs = 300
@@ -305,7 +306,7 @@ for i in range(epochs):
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
     if i == 0:
-        semisup_model.selector.th = min(0.8*semisup_model.selector.latest_weighted_features.cpu().min().item(), 1/len(feature_names)) # 0
+        semisup_model.selector.th = 0.8*semisup_model.selector.latest_weighted_features.cpu().min().item() # 0
         # semisup_model.selector.th = 0.1 # 1e-1, 1e-2, 1e-3
         print(semisup_model.selector.th)
     if i%25==0:
@@ -314,8 +315,11 @@ for i in range(epochs):
 
 feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
 print(feature_importance)
-old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
-feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
+old_th = 1/len(feature_importance); diff = old_th-semisup_model.selector.th
+if diff < 0:
+    feature_importance = feature_importance - abs(diff)
+else:
+    feature_importance = feature_importance + abs(diff)
 print(feature_importance)
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_noisy2.pth")
+torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_30000.pth")
