@@ -33,8 +33,8 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-# N = 1024*21
-N = 30000
+# N = 30000
+N = 1024*21
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -43,8 +43,8 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 # REG = 2e-2 # 0, 1e-2
-# REG = 1e-3 # 0, 1e-2
-REG = 1e-4 # 0, 1e-2
+REG = 2e-3 # 0, 1e-2
+# REG = 2e-4 # 0, 1e-2
 # REG = 0 # 0, 1e-2
 print(REG)
 
@@ -64,7 +64,7 @@ else: print("Clean u_train")
 include_N_res = True
 if include_N_res:
     N_res = N//2
-    idx_res = np.array(range(X_star.shape[0]))[~idx]
+    idx_res = np.array(range(X_star.shape[0]-1))[~idx]
     idx_res = np.random.choice(idx_res.shape[0], N_res, replace=True)
     X_res = X_star[idx_res, :]
     print(f"Training with {N_res} unsup samples")
@@ -213,7 +213,7 @@ class SemiSupModel(nn.Module):
 
 lets_pretrain = True
 pretrained_weights = "./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth"
-pretrained_weights = None
+# pretrained_weights = None
 semisup_model = SemiSupModel(network=Network(
                                     model=TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1],
                                                    # activation_function=nn.Tanh(),
@@ -249,7 +249,7 @@ def pcgrad_closure(return_list=False):
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7 # Used to be 1e-11.
-optimizer.param_groups[1]['lr'] = 1e-2 # pub: 5e-3
+optimizer.param_groups[1]['lr'] = 5e-3 # pub: 5e-3
 
 if lets_pretrain:
     print("Pretraining")
@@ -291,12 +291,13 @@ if lets_pretrain:
     # If there is the best_state_dict
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
-    referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
-    semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
-    semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
-    del referenced_derivatives
+#    referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
+#    semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+#    semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+#    del referenced_derivatives
 
-semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init_20220412.pth")
+semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init.pth")
+# semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init_20220412.pth")
 # torch.save(semisup_model.state_dict(), "./lambda_study/take2/init_20220412.pth")
 
 # Use ~idx to sample adversarial data points
@@ -316,10 +317,8 @@ for i in range(epochs):
 feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
 print(feature_importance)
 old_th = 1/len(feature_importance); diff = old_th-semisup_model.selector.th
-if diff < 0:
-    feature_importance = feature_importance - abs(diff)
-else:
-    feature_importance = feature_importance + abs(diff)
+if diff < 0: feature_importance = feature_importance - abs(diff)
+else: feature_importance = feature_importance + abs(diff)
 print(feature_importance)
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_30000.pth")
+torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_nogamma.pth")
