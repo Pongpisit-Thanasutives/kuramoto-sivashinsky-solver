@@ -41,15 +41,15 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
-REG = 2e-2 # 0, 1e-2
-# REG = 2e-3 # 0, 1e-2
+# REG = 2e-2 # 0, 1e-2
+REG = 2e-3 # 0, 1e-2
 # REG = 2e-4 # 0, 1e-2
 # REG = 0 # 0, 1e-2
 print(REG)
 
 noise_intensity_xt = 0.01/np.sqrt(2)
 noise_intensity_labels = 0.01
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
 if noisy_xt and noise_intensity_xt > 0.0:
     print("Noisy X_train")
     X_train = perturb2d(X_train, noise_intensity_xt)
@@ -212,7 +212,7 @@ class SemiSupModel(nn.Module):
 
 lets_pretrain = True
 pretrained_weights = "./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth"
-# pretrained_weights = None
+pretrained_weights = None
 semisup_model = SemiSupModel(network=Network(
                                     model=TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1],
                                                    # activation_function=nn.Tanh(),
@@ -290,7 +290,12 @@ if lets_pretrain:
     # If there is the best_state_dict
     if best_state_dict is not None: semisup_model.load_state_dict(best_state_dict)
 
-semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init.pth")
+    referenced_derivatives, _ = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
+    semisup_model.mini = torch.min(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+    semisup_model.maxi = torch.max(referenced_derivatives, axis=0)[0].detach().requires_grad_(False)
+    del referenced_derivatives
+
+# semisup_model = load_weights(semisup_model,  "./lambda_study/take2/init.pth")
 # torch.save(semisup_model.state_dict(), "./lambda_study/take2/init.pth")
 
 # Use ~idx to sample adversarial data points
@@ -313,4 +318,4 @@ old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
 feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
 print(feature_importance)
 print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_fixed_init.pth")
+torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_noisy2.pth")
