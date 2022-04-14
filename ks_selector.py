@@ -42,9 +42,9 @@ X_train = X_star[idx,:]
 u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
-REG = 2e-2 # 0, 1e-2
+# REG = 2e-2 # 0, 1e-2
 # REG = 2e-3 # 0, 1e-2
-# REG = 2e-4 # 0, 1e-2
+REG = 2e-4 # 0, 1e-2
 # REG = 0 # 0, 1e-2
 print(REG)
 
@@ -320,5 +320,5 @@ old_th = 1/len(feature_importance); diff = old_th-semisup_model.selector.th
 if diff < 0: feature_importance = feature_importance - abs(diff)
 else: feature_importance = feature_importance + abs(diff)
 print(feature_importance)
-print("Saving trained weights...")
-torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_nogamma.pth")
+# print("Saving trained weights...")
+# torch.save(semisup_model.state_dict(), f"./lambda_study/take2/{REG}_nogamma.pth")
