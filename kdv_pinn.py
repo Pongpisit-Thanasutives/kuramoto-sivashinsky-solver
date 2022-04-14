@@ -52,7 +52,7 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 noise_intensity = 0.01
-noisy_xt, noisy_labels = False, False
+noisy_xt, noisy_labels = True, True
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     X_noise = perturb2d(X_train, noise_intensity/np.sqrt(2), overwrite=False)
@@ -210,7 +210,8 @@ elif state == 2:
 	key = 'noisy2_'
 	name = "noisy2"
 num_train_samples = 1000
-pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
+# pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
+pretrained_weiights = f"./kdv_lambdas_study_weights/2e-06_{key}2000samples.pth"
 semisup_model_state_dict = cpu_load(pretrained_weiights)
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
@@ -231,7 +232,7 @@ pinn = RobustPINN(model=model, loss_fn=None,
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(cs, cs), init_betas=(betas, betas), learnable_pde_coeffs=False).to(device)
 
-NUMBER = 128*421
+NUMBER = 128*1000
 NUMBER = min(NUMBER, X_star.shape[0])
 xx, tt = X_star[:NUMBER, 0:1], X_star[:NUMBER, 1:2]
 
@@ -302,7 +303,8 @@ def closure2():
         l.backward(retain_graph=True)
     return l
 
-save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
+# save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}.pth"
 
 epochs1, epochs2 = 30, 30
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
@@ -329,4 +331,4 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-# save(pinn, save_weights_at)
+save(pinn, save_weights_at)
