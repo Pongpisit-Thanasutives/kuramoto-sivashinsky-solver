@@ -1,1 +1,1 @@
-vim ks_selector.py
+vim kdv_pinn.py

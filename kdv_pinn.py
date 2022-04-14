@@ -204,7 +204,7 @@ model = TorchMLP(dimensions=[2, 50, 50, 50 ,50, 50, 1], bn=nn.LayerNorm, dropout
 key = ''
 name = "cleanall"
 if state == 1: 
-	key = 'noisy_'
+	key = 'noisy1_'
 	name = "noisy1"
 elif state == 2: 
 	key = 'noisy2_'
@@ -222,7 +222,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -307,7 +307,8 @@ def closure2():
 save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}.pth"
 
 epochs1, epochs2 = 30, 30
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
+max_iters, max_evals = 20000, 20000 # 2: (20000, 20000, 1000)
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=1000, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -320,7 +321,7 @@ for i in range(epochs1):
 
 if epochs2 > 0:
     pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=20000, max_eval=20000, history_size=1000, line_search_fn='strong_wolfe')
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
