@@ -41,10 +41,10 @@ load_idx = True
 N = 2000
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 if load_idx: 
-    idx = np.load("./kdv_weights/data_files/idx.npy")
+    idx = np.load("./kdv_weights/data_files/idx_2000.npy")
     print("Loaded indices...")
 else: 
-    np.save("./kdv_weights/data_files/idx_res.npy", idx)
+    np.save("./kdv_weights/data_files/idx_2000.npy", idx)
     print("Saved indices...")
 idx = np.sort(idx)
 X_train = X_star[idx,:]
@@ -57,13 +57,13 @@ noise_version = ''
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     X_noise = perturb2d(X_train, noise_intensity/np.sqrt(2), overwrite=False)
-    X_noise = np.load(f"./kdv_weights/X_noise{noise_version}.npy")
+    X_noise = np.load(f"./kdv_weights/data_files/X_noise{noise_version}.npy")
     X_train = X_train + X_noise
     print("Noisy (x, t)")
 else: print("Clean (x, t)")
 if noisy_labels: 
     u_noise = perturb(u_train, noise_intensity, overwrite=False)
-    u_noise = np.load(f"./kdv_weights/u_noise{noise_version}.npy")
+    u_noise = np.load(f"./kdv_weights/data_files/u_noise{noise_version}.npy")
     u_train = u_train + u_noise
     print("Noisy labels")
 else: print("Clean labels")
@@ -223,7 +223,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -305,11 +305,11 @@ def closure2():
     return l
 
 # save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
-save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}_2000samples.pth"
-
-epochs1, epochs2 = 30, 30
-max_iters, max_evals = 20000, 20000 # 2: (20000, 20000, 1000)
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=1000, line_search_fn='strong_wolfe')
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples.pth"
+pinn.noiseless_mode = True
+epochs1, epochs2 = 30, 50
+max_iters, max_evals, hs = 20000, 20000, 1000 # 2: (20000, 20000, 1000)
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -322,7 +322,8 @@ for i in range(epochs1):
 
 if epochs2 > 0:
     pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=1000, line_search_fn='strong_wolfe')
+    pinn.noiseless_mode = False
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)

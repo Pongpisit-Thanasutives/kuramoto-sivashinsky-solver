@@ -1,1 +1,1 @@
-vim kdv_pinn_2000.py
+vim kdv_pinn_2000_pub.py
