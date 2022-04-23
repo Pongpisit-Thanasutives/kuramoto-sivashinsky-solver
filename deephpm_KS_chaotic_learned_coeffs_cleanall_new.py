@@ -63,7 +63,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -85,8 +85,14 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 program = None; name = None
 if state == 0:
     program = [-1.031544, -0.976023, -0.973498]
+    # ft
     program = [-0.964878, -0.914432, -0.940299]
+    # ft2
     program = [-1.010044, -0.983260, -0.971987]
+    # ft3 
+    program = [-0.990563, -0.969335, -0.977459]
+    # ft4
+    # program = [-0.989305, -0.970189, -0.978123]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -239,7 +245,7 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft2_cpu.pth")
+semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft3_cpu.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
