@@ -63,7 +63,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -239,7 +239,7 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft_cpu.pth")
+semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft2_cpu.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -283,7 +283,6 @@ X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
 WWW = 0.5
-if state == 0: WWW = 0.5
 
 def closure1():
     if torch.is_grad_enabled():
@@ -307,7 +306,7 @@ def closure2():
 epochs1, epochs2 = 20, 20
 if state == 0: 
     epochs1, epochs2 = 20, 20
-    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1, max_iter=10000, max_eval=10000, history_size=10000, line_search_fn='strong_wolfe')
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.5, max_iter=20000, max_eval=int(20000*1.25), history_size=20000, line_search_fn='strong_wolfe')
 
 pinn.train(); best_loss = 1e6
 pinn.set_learnable_coeffs(True)
@@ -328,13 +327,13 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-#    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-#                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-#                      pretrained=True, noiseless_mode=noiseless_mode, 
-#                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
+    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                      pretrained=True, noiseless_mode=noiseless_mode, 
+                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
     pinn.set_learnable_coeffs(False)
     if state == 0:
-        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=10000, max_eval=int(10000), history_size=10000, line_search_fn='strong_wolfe')
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=0.5, max_iter=20000, max_eval=int(20000*1.25), history_size=20000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
