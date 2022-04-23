@@ -1,5 +1,4 @@
 # coding: utf-8
-import random; random.seed(0)
 import torch; device = torch.device("cuda"); print(device)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
@@ -32,27 +31,25 @@ ub = X_star.max(axis=0)
 
 force_save = False
 
-N = 1024*21 # 20000, 30000, 60000
+t_steps = 21
+N = 1024*t_steps # 20000, 30000, 60000
 N = min(N, X_star.shape[0])
 print(f"Fine-tuning with {N} samples")
-idx = np.random.choice(X_star.shape[0], N, replace=False)
+# idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
-if force_save: np.save("./weights/final/idx.npy", idx)
-else: idx = np.load("./weights/final/idx.npy")
+# if force_save: np.save("./weights/final/idx.npy", idx)
+# else: idx = np.load("./weights/final/idx.npy")
 
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01; double = 2
-double = int(double)
-print(f"double = {double}")
-noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
+noise_intensity = 0.01
+noisy_xt = False; noisy_labels = False; state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
     print("Noisy (x, t)")
     X_noise = perturb2d(X_u_train, noise_intensity/np.sqrt(2), overwrite=False)
     if force_save: np.save("./weights/final/X_noise.npy", X_noise)
     else: X_noise = np.load("./weights/final/X_noise.npy")
-    X_noise = X_noise * double
     X_u_train = X_u_train + X_noise
 else: print("Clean (x, t)")
 if noisy_labels: 
@@ -60,14 +57,13 @@ if noisy_labels:
     u_noise = perturb(u_train, noise_intensity, overwrite=False)
     if force_save: np.save("./weights/final/u_noise.npy", u_noise)
     else: u_noise = np.load("./weights/final/u_noise.npy")
-    u_noise = u_noise * double
     u_train = u_train + u_noise
 else: print("Clean labels")
 
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -89,15 +85,14 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 program = None; name = None
 if state == 0:
     program = [-1.031544, -0.976023, -0.973498]
+    program = [-0.964878, -0.914432, -0.940299]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
-    if double > 1: program = [-random.uniform(0, 1)*(1e-6) for _ in range(3)]
     name = "noisy2"
     print(X_noise.max(), X_noise.min())
 elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
-    if double > 1: program = [-random.uniform(0, 1)*(1e-6) for _ in range(3)]
     name = "noisy1"
 program = f'''
 {program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
@@ -124,8 +119,8 @@ class RobustPINN(nn.Module):
             self.out_fft_nn = FFTTh(c=init_cs[1])
 
             # Robust Beta-PCA
-            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
-            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=True, inp_dims=1, hidden_dims=32)
+            self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=False, inp_dims=2, hidden_dims=32)
+            self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=False, inp_dims=1, hidden_dims=32)
         
         self.callable_loss_fn = loss_fn
         self.init_parameters = [nn.Parameter(torch.tensor(x.item())) for x in loss_fn.parameters()]
@@ -173,16 +168,12 @@ class RobustPINN(nn.Module):
                                 torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
             X_input_noise = X_input-X_input_noise
             # X_input_noise = X_noise_wiener
-            # Work for high noise
-            # X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=True, axis=0, apply_tanh=False)
-            X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=0, apply_tanh=True)
+            X_input = self.inp_rpca(X_input, X_input_noise, normalize=False, center=False, is_clamp=False, axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
             y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
             # y_input_noise = u_noise_wiener
-            # Work for high noise
-            # y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=True, axis=None, apply_tanh=False)
-            y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=None, apply_tanh=True)
+            y_input = self.out_rpca(y_input, y_input_noise, normalize=False, center=False, is_clamp=False, axis=None, apply_tanh=True)
         
         grads_dict, u_t = self.grads_dict(X_input[:, 0:1], X_input[:, 1:2])
         
@@ -196,10 +187,13 @@ class RobustPINN(nn.Module):
         if update_pde_params:
             if not self.learn:
                 H = cat(grads_dict["uf"]*grads_dict["u_x"], grads_dict["u_xx"], grads_dict["u_xxxx"])
-                self.coeff_buffer = torch.linalg.lstsq(H, u_t).solution.detach()
+                self.coeff_buffer = torch.linalg.lstsq(H[:1024*(t_steps), :], u_t[:1024*(t_steps), :]).solution.detach()
                 l_eq = F.mse_loss(H@(self.coeff_buffer), u_t)
             else:
-                u_t_pred = (self.param2*grads_dict["uf"]*grads_dict["u_x"])+(self.param1*grads_dict["u_xx"])+(self.param0*grads_dict["u_xxxx"])
+                param0 = self.param0.detach()
+                param1 = self.param1.detach()
+                param2 = self.param2.detach()
+                u_t_pred = (param2*grads_dict["uf"]*grads_dict["u_x"])+(param1*grads_dict["u_xx"])+(param0*grads_dict["u_xxxx"])
                 l_eq = F.mse_loss(u_t_pred, u_t)
             total_loss.append(l_eq)
             
@@ -259,22 +253,25 @@ model.load_state_dict(parameters)
 
 pinn = RobustPINN(model=model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                  pretrained=True, noiseless_mode=noiseless_mode)
+                  pretrained=True, noiseless_mode=noiseless_mode, 
+                  init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
+
+saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
+saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
 
 if state == 0:
-    pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
+    # pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
+    pinn = load_weights(pinn, "./weights/0.002_fixed_init_ft_cpu.pth")
 elif state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 elif state == 2:
-    # pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
-    pinn = load_weights(pinn, "./weights/semisup_model_noisy2_pub.pth")
-
-alpha = 0.1
+    pinn = load_weights(pinn, "./weights/rudy_KS_noisy2_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
 
 pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
                   index2features=feature_names, scale=True, lb=lb, ub=ub, 
                   pretrained=True, noiseless_mode=noiseless_mode, 
-                  init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
+                  init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
+pinn = load_weights(pinn, saved_last_weights)
 
 _, x_fft, x_PSD = fft1d_denoise(X_u_train[:, 0:1], c=-5, return_real=True)
 _, t_fft, t_PSD = fft1d_denoise(X_u_train[:, 1:2], c=-5, return_real=True)
@@ -289,14 +286,14 @@ X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
 WWW = 0.5
-if state == 0: WWW = 0.1
+if state == 0: WWW = 5e-1
 
 def closure1():
     if torch.is_grad_enabled():
         optimizer1.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
     # print(losses)
-    l = ((1-WWW)*losses[0])+(WWW*losses[1])
+    l = (1-WWW)*(losses[0])+(WWW)*(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
@@ -305,17 +302,18 @@ def closure2():
     if torch.is_grad_enabled():
         optimizer2.zero_grad()
     losses = pinn.loss(X_u_train, (x_fft, x_PSD, t_fft, t_PSD), u_train, (u_train_fft, u_train_PSD), update_network_params=True, update_pde_params=True)
-    l = ((1-WWW)*losses[0])+(WWW*losses[1])
+    l = (1-WWW)*(losses[0])+(WWW)*(losses[1])
     if l.requires_grad:
         l.backward(retain_graph=True)
     return l
 
 epochs1, epochs2 = 20, 20
-if state == 0: epochs2 = 0
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
-pinn.train(); best_loss = 1e6
-saved_last_weights = f"./weights/final/new/more_noise/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=5e-2, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+if state == 0: 
+    epochs1, epochs2 = 10, 1
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
 
+pinn.train(); best_loss = 1e6
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
 for i in range(epochs1):
@@ -325,6 +323,8 @@ for i in range(epochs1):
         print("Epoch {}: ".format(i), l.item())
         pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
         print(pred_params)
+        errs = 100*np.abs(pred_params+1)
+        print(errs.mean(), errs.std())
 
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
@@ -332,14 +332,10 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-    if not noiseless_mode:
-        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                          pretrained=True, noiseless_mode=noiseless_mode, 
-                          init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
-
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+    if state == 0:
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=int(1000), history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
@@ -348,10 +344,12 @@ if epochs2 > 0:
             print("Epoch {}: ".format(i), l.item())
             pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
+            errs = 100*np.abs(pred_params+1)
+            print(errs.mean(), errs.std())
 
-save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
+save(pinn, f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}.pth")
