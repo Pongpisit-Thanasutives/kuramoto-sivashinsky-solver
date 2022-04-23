@@ -248,7 +248,7 @@ if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
 # semisup_model_state_dict = load_fn("./weights/deephpm_KS_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trained60000labeledsamples_trained0unlabeledsamples.pth")
-semisup_model_state_dict = load_fn("./weights/semisup_model_with_LayerNormDropout_without_physical_reg_trained30000labeledsamples_trained15000unlabeledsamples.pth")
+semisup_model_state_dict = load_fn("./weights/semisup_model_noisy2_pub.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -289,7 +289,6 @@ X_u_train = X_u_train.to(device)
 u_train = u_train.to(device)
 
 WWW = 0.5
-if state == 0: WWW = 0.1
 
 def closure1():
     if torch.is_grad_enabled():
@@ -311,8 +310,9 @@ def closure2():
     return l
 
 epochs1, epochs2 = 20, 20
+MMM = 500
 if state == 0: epochs2 = 0
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=MMM, max_eval=int(MMM*1.25), history_size=MMM, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
 saved_last_weights = f"./weights/final/new/more_noise/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
 
@@ -339,7 +339,7 @@ if epochs2 > 0:
                           init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
 
     pinn.set_learnable_coeffs(False)
-    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
+    optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=MMM, max_eval=int(MMM*1.25), history_size=MMM, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
