@@ -65,7 +65,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -87,7 +87,7 @@ feature_names=('uf', 'u_x', 'u_xx', 'u_xxxx'); feature2index = {}
 program = None; name = None
 if state == 0:
     program = [-1.031544, -0.976023, -0.973498]
-    program = [-0.964878, -0.914432, -0.940299]]
+    program = [-0.964878, -0.914432, -0.940299]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -95,7 +95,7 @@ elif state == 2:
     name = "noisy2"
 elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
-    program = [-0.897309, -0.849259, -0.930757]]
+    program = [-0.897309, -0.849259, -0.930757]
     name = "noisy1"
 program = f'''
 {program[0]}*u_xx{program[1]}*u_xxxx{program[2]}*uf*u_x
@@ -260,7 +260,7 @@ pinn = RobustPINN(model=model, loss_fn=mod,
 
 if state == 0:
     # pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
-    pinn = load_weights(pinn, "./weights/final/0.002_fixed_init_ft_cpu.pth")
+    pinn = load_weights(pinn, "./weights/0.002_fixed_init_ft_cpu.pth")
 elif state == 1:
     # pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
     pinn = load_weights(pinn, "./weights/semisup_model_noisy1_pub.pth")
@@ -311,7 +311,7 @@ epochs1, epochs2 = 20, 20
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=500, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-saved_last_weights = f"./weights/final/more_noise/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
+saved_last_weights = f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
 
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
