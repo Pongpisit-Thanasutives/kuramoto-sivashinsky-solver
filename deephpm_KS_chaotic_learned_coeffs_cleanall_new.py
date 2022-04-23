@@ -63,7 +63,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -89,13 +89,15 @@ if state == 0:
     program = [-0.964878, -0.914432, -0.940299]
     # ft2
     program = [-1.010044, -0.983260, -0.971987]
+    program = [-0.99337566, -0.99636954, -0.9812027]
     # ft3 
-    program = [-0.990563, -0.969335, -0.977459]
+    # program = [-0.990563, -0.969335, -0.977459]
     # program = [-1.014781, -0.963217, -0.960055]
 
     # ft4
     program = [-0.989305, -0.970189, -0.978123]
-    program = [-0.99, -0.97, -0.98]
+    program = [-0.9946055, -0.9842144, -0.9650949] # nodft once
+    # program = [-0.9921787,  -0.99581176, -0.982699] # dft once
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -262,12 +264,13 @@ pinn = RobustPINN(model=model, loss_fn=mod,
                   pretrained=True, noiseless_mode=noiseless_mode, 
                   init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
 
-saved_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_{name}.pth"
-saved_last_weights = f"./weights/final/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}.pth"
+# saved_last_weights = f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}_ft2_b.pth"
 
 if state == 0:
     # pinn = load_weights(pinn, "./weights/final/cleanall_pinn_pretrained_weights.pth")
-    # pinn = load_weights(pinn, "./weights/0.002_fixed_init_ft_cpu.pth")
+    # pinn = load_weights(pinn, "./weights/0.002_fixed_init_ft4_cpu.pth")
+    pinn = load_weights(pinn, f"./weights/final/new/deephpm_KS_chaotic_nodft_learnedcoeffs_1024x21_last_{name}_ft4_b.pth")
+    # pinn = load_weights(pinn, saved_last_weights)
     pass
 elif state == 1:
     pinn = load_weights(pinn, "./weights/rudy_KS_noisy1_chaotic_semisup_model_with_LayerNormDropout_without_physical_reg_trainedfirst30000labeledsamples_trained0unlabeledsamples_work.pth")
@@ -314,8 +317,8 @@ def closure2():
 
 epochs1, epochs2 = 20, 20
 if state == 0: 
-    epochs1, epochs2 = 20, 20
-    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
+    epochs1, epochs2 = 40, 40
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=1000, max_eval=int(1000*1.25), history_size=1000, line_search_fn='strong_wolfe')
 
 pinn.train(); best_loss = 1e6
 pinn.set_learnable_coeffs(True)
@@ -336,13 +339,14 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                      pretrained=True, noiseless_mode=noiseless_mode, 
-                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
+# for dft only
+#    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+#                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
+#                      pretrained=True, noiseless_mode=noiseless_mode, 
+#                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
     pinn.set_learnable_coeffs(False)
     if state == 0:
-        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=1000, max_eval=int(10000*1.25), history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
@@ -359,4 +363,4 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-save(pinn, f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}.pth")
+save(pinn, f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}_ft4_pub.pth")
