@@ -63,7 +63,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -91,8 +91,11 @@ if state == 0:
     program = [-1.010044, -0.983260, -0.971987]
     # ft3 
     program = [-0.990563, -0.969335, -0.977459]
+    # program = [-1.014781, -0.963217, -0.960055]
+
     # ft4
-    # program = [-0.989305, -0.970189, -0.978123]
+    program = [-0.989305, -0.970189, -0.978123]
+    program = [-0.99, -0.97, -0.98]
     name = "cleanall"
 elif state == 2:
     program = [-0.898254, -0.808380, -0.803464]
@@ -245,7 +248,7 @@ load_fn = gpu_load
 if not next(model.parameters()).is_cuda:
     load_fn = cpu_load
 
-semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft3_cpu.pth")
+semisup_model_state_dict = load_fn("./weights/0.002_fixed_init_ft4_cpu.pth")
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
 inner_part = "network.model."
@@ -312,7 +315,7 @@ def closure2():
 epochs1, epochs2 = 20, 20
 if state == 0: 
     epochs1, epochs2 = 20, 20
-    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.5, max_iter=20000, max_eval=int(20000*1.25), history_size=20000, line_search_fn='strong_wolfe')
+    optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
 
 pinn.train(); best_loss = 1e6
 pinn.set_learnable_coeffs(True)
@@ -339,7 +342,7 @@ if epochs2 > 0:
                       init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3)).to(device)
     pinn.set_learnable_coeffs(False)
     if state == 0:
-        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=0.5, max_iter=20000, max_eval=int(20000*1.25), history_size=20000, line_search_fn='strong_wolfe')
+        optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=0.1, max_iter=100, max_eval=int(100*1.25), history_size=100, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
         optimizer2.step(closure2)
