@@ -1,1 +1,1 @@
-vim deephpm_KS_chaotic_learned_coeffs_cleanall_new.py
+vim deephpm_KS_chaotic_learned_coeffs_more_noise.py

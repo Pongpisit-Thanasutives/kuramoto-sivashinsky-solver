@@ -43,7 +43,7 @@ else: idx = np.load("./weights/final/idx.npy")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01; double = 2
+noise_intensity = 0.01; double = 10
 double = int(double)
 print(f"double = {double}")
 noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
@@ -314,7 +314,7 @@ MMM = 500
 if state == 0: epochs2 = 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=MMM, max_eval=int(MMM*1.25), history_size=MMM, line_search_fn='strong_wolfe')
 pinn.train(); best_loss = 1e6
-saved_last_weights = f"./weights/final/new/more_noise/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}.pth"
+saved_last_weights = f"./weights/final/new/more_noise/deephpm_KS_chaotic_{model_name}_learnedcoeffs_last_{name}_double{double}_alpha{alpha}.pth"
 
 pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -349,9 +349,14 @@ if epochs2 > 0:
             pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
             print(pred_params)
 
-save(pinn, saved_last_weights)
+# save(pinn, saved_last_weights)
 if not pinn.learn: pred_params = pinn.coeff_buffer.cpu().flatten().numpy()
 else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param2.item()])
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
+bs = 1000
+# bs = 17.478683
+if errs.mean() < bs:
+    save(pinn, saved_last_weights)
+    print("Saving better weights!")
