@@ -52,7 +52,7 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 noise_intensity = 0.01
-noisy_xt, noisy_labels = True, True
+noisy_xt, noisy_labels = False, False
 noise_version = ''
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
@@ -223,7 +223,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -250,6 +250,7 @@ derivatives = torch.cat(derivatives, dim=1)
 
 terms = ["uf*u_x", "u_xxx"]
 values = torch.linalg.lstsq(derivatives, u_t).solution.detach().cpu().numpy().flatten()
+# print(values)
 
 class PDEExpression(nn.Module):
     def __init__(self, terms, values):
@@ -305,7 +306,7 @@ def closure2():
     return l
 
 # save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
-save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples.pth"
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220516.pth"
 # pinn.noiseless_mode = True
 epochs1, epochs2 = 30, 50
 max_iters, max_evals, hs = 300, 300, 150 # 2: (20000, 20000, 1000)
