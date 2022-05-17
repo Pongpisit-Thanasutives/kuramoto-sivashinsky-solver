@@ -1,1 +1,1 @@
-vim deephpm_KS_chaotic_learned_coeffs_more_noise.py
+vim kdv_pinn_2000_pub_20220517.py
