@@ -53,7 +53,7 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 noise_intensity = 0.01
-noisy_xt, noisy_labels = True, True
+noisy_xt, noisy_labels = False, True
 noise_version = ''
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
@@ -214,7 +214,7 @@ elif state == 2:
 num_train_samples = 1000
 # pretrained_weiights = f"./kdv_weights/{key}simple2_semisup_model_state_dict_{num_train_samples}labeledsamples{num_train_samples}unlabeledsamples_tanhV2.pth"
 # pretrained_weiights = f"./kdv_lambdas_study_weights/2e-06_{key}{noise_version}2000samples.pth"
-pretrained_weiights = f"./kdv_lambdas_study_weights/2e-05_{key}_2000samples_20220517.pth"
+pretrained_weiights = f"./kdv_lambdas_study_weights/2e-05_{key}2000samples_20220517.pth"
 semisup_model_state_dict = cpu_load(pretrained_weiights)
 parameters = OrderedDict()
 # Filter only the parts that I care about renaming (to be similar to what defined in TorchMLP).
@@ -225,7 +225,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -308,11 +308,11 @@ def closure2():
     return l
 
 # save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
-save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220517.pth"
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220517_V2.pth"
 # pinn.noiseless_mode = True
 epochs1, epochs2 = 30, 50
 # max_iters, max_evals, hs = 300, 300, 150 # 2: (20000, 20000, 1000)
-max_iters, max_evals, hs = 20000, 20000, 1000 # 2: (20000, 20000, 1000)
+max_iters, max_evals, hs = 20000, 20000, 20000//2 # 2: (20000, 20000, 1000)
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -325,10 +325,10 @@ for i in range(epochs1):
         errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-#    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-#                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-#                      pretrained=True, noiseless_mode=noiseless_mode, 
-#                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=False).to(device)
+    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                      pretrained=True, noiseless_mode=noiseless_mode, 
+                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=False).to(device)
     pinn.set_learnable_coeffs(False)
     # pinn.noiseless_mode = False
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
