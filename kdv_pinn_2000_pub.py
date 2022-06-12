@@ -1,4 +1,5 @@
 # coding: utf-8
+print("Only for the cleanall experiment!!!")
 import torch; device = torch.device("cuda"); print(device)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
@@ -223,7 +224,7 @@ for p in semisup_model_state_dict:
 model.load_state_dict(parameters)
 
 cs = 0.1; betas = 1e-3
-noiseless_mode = True
+noiseless_mode = False
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -306,11 +307,11 @@ def closure2():
     return l
 
 # save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
-save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220517.pth"
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220529.pth"
 # pinn.noiseless_mode = True
 epochs1, epochs2 = 30, 50
-# max_iters, max_evals, hs = 300, 300, 300//2 # 2: (20000, 20000, 1000)
-max_iters, max_evals, hs = 10000, 10000, 10000//2 # 2: (20000, 20000, 1000)
+# max_iters, max_evals, hs = 10000, 10000, 10000//2 # 1, 2
+max_iters, max_evals, hs = 10000, 10000, 10000//2 # 0
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -323,12 +324,12 @@ for i in range(epochs1):
         errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-    pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                      index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                      pretrained=True, noiseless_mode=noiseless_mode, 
-                      init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=False).to(device)
+    if state > -1:
+        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                          pretrained=True, noiseless_mode=noiseless_mode, 
+                          init_cs=(0.1, 0.1), init_betas=(1e-3, 1e-3), learnable_pde_coeffs=False).to(device)
     pinn.set_learnable_coeffs(False)
-    # pinn.noiseless_mode = False
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
     print('2nd Phase')
     for i in range(epochs2):
@@ -340,4 +341,4 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-save(pinn, save_weights_at)
+if errs.mean() < 0.308: save(pinn, save_weights_at)

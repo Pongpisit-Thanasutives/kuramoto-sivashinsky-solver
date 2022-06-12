@@ -332,11 +332,11 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-    if not noiseless_mode:
-        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                          pretrained=True, noiseless_mode=noiseless_mode, 
-                          init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
+#    if not noiseless_mode:
+#        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+#                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
+#                          pretrained=True, noiseless_mode=noiseless_mode, 
+#                          init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
 
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=MMM, max_eval=int(MMM*1.25), history_size=MMM, line_search_fn='strong_wolfe')
@@ -355,7 +355,7 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-bs = 1000
+bs = -1
 # bs = 17.478683
 if errs.mean() < bs:
     save(pinn, saved_last_weights)

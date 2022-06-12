@@ -74,13 +74,19 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noisy_xt = False; noisy_labels = False
+noisy_xt = False; noisy_labels = True
 noise_intensity = 0.01/np.sqrt(2)
 if noisy_xt:
-    X_train = perturb2d(X_train, noise_intensity)
+    X_train = X_train + np.load("./qho_weights/pub/X_train_noise.npy")
+    print("X_train_noise")
+    # X_train = perturb2d(X_train, noise_intensity)
 if noisy_labels:
-    u_train = perturb(u_train, noise_intensity)
-    v_train = perturb(v_train, noise_intensity)
+    u_train = u_train + np.load("./qho_weights/pub/u_train_noise.npy")
+    v_train = v_train + np.load("./qho_weights/pub/v_train_noise.npy")
+    print("u_train_noise")
+    print("v_train_noise")
+    # u_train = perturb(u_train, noise_intensity)
+    # v_train = perturb(v_train, noise_intensity)
 
 # Converting to tensor
 X_star = to_tensor(X_star, True)
@@ -129,7 +135,7 @@ derivatives = cat_numpy(h_star.detach().numpy(), V, fd_h_x, fd_h_xx, fd_h_xxx)
 dictionary = {}
 for i in range(len(feature_names)): dictionary[feature_names[i]] = get_feature(derivatives, i)
 
-PRETRAINED_PATH = "./qho_weights/pretrained_cpinn_2000labeledsamples.pth"
+# PRETRAINED_PATH = "./qho_weights/pretrained_cpinn_2000labeledsamples.pth"
 PRETRAINED_PATH = None
 
 inp_dimension = 2
@@ -187,9 +193,10 @@ class ComplexNetwork(nn.Module):
         return torch.cat(derivatives, dim=-1), u_t
     
     def neural_net_scale(self, inp):
-        return -1 + 2*(inp-self.lb)/(self.ub-self.lb)
+        return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 2e-2
+REG_INTENSITY = 1.5e-1
+print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -202,10 +209,7 @@ class ComplexAttentionSelectorNetwork(nn.Module):
         self.th = (1/layers[0])+(1e-10)
         self.reg_intensity = reg_intensity
         self.al = ApproxL0(sig=1.0)
-        # 1e0 = 1
-        # self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 1.0])
-        # 1e-2, 1e-4
-        self.w = torch.tensor([1.0, 4.0, 2.0, 4.0, 1.0]).to(device)
+        self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 1.0]).to(device)
         # self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
         
     def xavier_init(self, m):
@@ -268,6 +272,10 @@ semisup_model = SemiSupModel(
     uncert=False,
 ).to(device)
 
+ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_noise.pth"
+# save(semisup_model, ppp)
+semisup_model = load_weights(semisup_model, ppp)
+
 X_train = X_train.to(device)
 h_train = h_train.to(device)
 X_star = X_star.to(device)
@@ -308,21 +316,25 @@ def pcgrad_closure(return_list=False):
     if torch.is_grad_enabled():
         optimizer.zero_grad()
     fd_guidance, unsup_loss = semisup_model(X_train, h_train, include_unsup=True)
-    loss = fd_guidance + (1e-2)*unsup_loss
+    loss = fd_guidance+(1e-3)*unsup_loss
     if loss.requires_grad:
         loss.backward(retain_graph=True)
     if not return_list: return loss
     else: return fd_guidance, unsup_loss
 
-save(semisup_model, f"./qho_weights/pretrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
+# manipulate here for clean all dataset
+# ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_lambda1.pth"
+# save(semisup_model, ppp)
+# semisup_model = load_weights(semisup_model, ppp)
 
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7
-optimizer.param_groups[1]['lr'] = 5e-2
+# optimizer.param_groups[1]['lr'] = 5e-2
+optimizer.param_groups[1]['lr'] = 1e-1
 
 # Use ~idx to sample adversarial data points
-for i in range(500):
+for i in range(1500):
     semisup_model.train()
     optimizer.step(pcgrad_closure)
     loss = pcgrad_closure(return_list=True)
@@ -353,9 +365,8 @@ for i in range(10):
         print(loss.item())
 
 feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
-old_th = 1/len(feature_importance); diff = abs(old_th-semisup_model.selector.th)
-feature_importance = np.where(feature_importance<old_th, feature_importance+diff, feature_importance)
 print(semisup_model.selector.th)
 print(feature_importance)
+print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
 
-save(semisup_model, f"./qho_weights/jointtrained_semisup_model_lambda1_{REG_INTENSITY}.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise1.pth")

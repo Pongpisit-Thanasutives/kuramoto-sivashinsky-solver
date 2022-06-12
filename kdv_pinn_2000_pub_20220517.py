@@ -53,7 +53,7 @@ u_train = u_star[idx,:]
 print("Training with", N, "samples")
 
 noise_intensity = 0.01
-noisy_xt, noisy_labels = False, True
+noisy_xt, noisy_labels = True, True
 noise_version = ''
 state = int(noisy_xt)+int(noisy_labels)
 if noisy_xt: 
@@ -308,11 +308,11 @@ def closure2():
     return l
 
 # save_weights_at = f"./kdv_weights/kdv_pretrained{num_train_samples}samples_{model_name}_learnedcoeffs_{name}.pth"
-save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220517_V2.pth"
+save_weights_at = f"./kdv_weights/pub_dPINNs/{model_name}_{name}{noise_version}_2000samples_20220529_V2.pth"
 # pinn.noiseless_mode = True
 epochs1, epochs2 = 30, 50
-# max_iters, max_evals, hs = 300, 300, 150 # 2: (20000, 20000, 1000)
-max_iters, max_evals, hs = 20000, 20000, 20000//2 # 2: (20000, 20000, 1000)
+# max_iters, max_evals, hs = 10000, 10000, 10000//2 # 1
+max_iters, max_evals, hs = 10000, 10000, 10000//2 # 2
 optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=max_iters, max_eval=max_evals, history_size=hs, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
 print('1st Phase')
@@ -342,4 +342,5 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-save(pinn, save_weights_at)
+if errs.mean()<0.49: save(pinn, save_weights_at); print("save")
+else: print("did not save")
