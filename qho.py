@@ -64,7 +64,8 @@ ub = X_star.max(axis=0)
 
 N = 30000; include_N_res = 0.5
 idx = np.random.choice(X_star.shape[0], N, replace=False)
-# idx = np.arange(N) # Just have an easy dataset for experimenting
+idx_path = "./qho_weights/pub/idx.npy"
+idx = np.load(idx_path)
 print(f"Training with {N} labeled samples")
 
 lb = to_tensor(lb, False).to(device)
@@ -74,7 +75,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noisy_xt = False; noisy_labels = True
+noisy_xt = False; noisy_labels = False
 noise_intensity = 0.01/np.sqrt(2)
 if noisy_xt:
     X_train = X_train + np.load("./qho_weights/pub/X_train_noise.npy")
@@ -272,9 +273,10 @@ semisup_model = SemiSupModel(
     uncert=False,
 ).to(device)
 
-ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_noise.pth"
+# manipulate here for noise1 and noise2 experiments
+# ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_noise.pth"
 # save(semisup_model, ppp)
-semisup_model = load_weights(semisup_model, ppp)
+# semisup_model = load_weights(semisup_model, ppp)
 
 X_train = X_train.to(device)
 h_train = h_train.to(device)
@@ -323,9 +325,9 @@ def pcgrad_closure(return_list=False):
     else: return fd_guidance, unsup_loss
 
 # manipulate here for clean all dataset
-# ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_lambda1.pth"
+ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_lambda1.pth"
 # save(semisup_model, ppp)
-# semisup_model = load_weights(semisup_model, ppp)
+semisup_model = load_weights(semisup_model, ppp)
 
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
@@ -369,4 +371,4 @@ print(semisup_model.selector.th)
 print(feature_importance)
 print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
 
-save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise1.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_20220612.pth")
