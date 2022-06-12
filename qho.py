@@ -75,8 +75,9 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noisy_xt = False; noisy_labels = False
+noisy_xt = True; noisy_labels = True
 noise_intensity = 0.01/np.sqrt(2)
+case = int(noisy_xt)+int(noisy_labels)
 if noisy_xt:
     X_train = X_train + np.load("./qho_weights/pub/X_train_noise.npy")
     print("X_train_noise")
@@ -196,7 +197,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1.5e-1
+REG_INTENSITY = 1.5e-2
 print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
@@ -274,9 +275,9 @@ semisup_model = SemiSupModel(
 ).to(device)
 
 # manipulate here for noise1 and noise2 experiments
-# ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_noise.pth"
+ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_noise.pth"
 # save(semisup_model, ppp)
-# semisup_model = load_weights(semisup_model, ppp)
+semisup_model = load_weights(semisup_model, ppp)
 
 X_train = X_train.to(device)
 h_train = h_train.to(device)
@@ -299,7 +300,7 @@ if lets_pretrain:
                                      line_search_fn=True, batch_mode=False)
 
     semisup_model.network.train()    
-    for i in range(10):
+    for i in range(1):
         pretraining_optimizer.step(pretraining_closure)
             
         if (i%2)==0:
@@ -325,9 +326,9 @@ def pcgrad_closure(return_list=False):
     else: return fd_guidance, unsup_loss
 
 # manipulate here for clean all dataset
-ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_lambda1.pth"
+# ppp = f"./qho_weights/pub/lambdas/pretrained_semisup_model_lambda1.pth"
 # save(semisup_model, ppp)
-semisup_model = load_weights(semisup_model, ppp)
+# semisup_model = load_weights(semisup_model, ppp)
 
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
@@ -371,4 +372,12 @@ print(semisup_model.selector.th)
 print(feature_importance)
 print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
 
-save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_20220612.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_10_20220613.pth")
+
+for i in range(90):
+    f_opt.step(finetuning_closure)
+    if i%2==0:
+        loss = finetuning_closure()
+        print(loss.item())
+
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_100_20220613.pth")
