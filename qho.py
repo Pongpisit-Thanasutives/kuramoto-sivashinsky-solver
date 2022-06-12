@@ -75,7 +75,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noisy_xt = True; noisy_labels = True
+noisy_xt = False; noisy_labels = True
 noise_intensity = 0.01/np.sqrt(2)
 case = int(noisy_xt)+int(noisy_labels)
 if noisy_xt:
@@ -197,7 +197,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1.5e-2
+REG_INTENSITY = 1.5e-1
 print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
