@@ -91,8 +91,10 @@ if noisy_labels:
     # v_train = perturb(v_train, noise_intensity)
 
 # Converting to tensor
-X_star = to_tensor(X_star, True)
-h_star = to_complex_tensor(h_star, False)
+X_star = to_tensor(perturb2d(X_star, noise_intensity, overwrite=True), True)
+u_star =  perturb(u_star, noise_intensity, overwrite=True)
+v_star =  perturb(v_star, noise_intensity, overwrite=True)
+h_star = to_complex_tensor(u_star+v_star*1j, False)
 
 X_train = to_tensor(X_train, True)
 u_train = to_tensor(u_train, False)
@@ -300,7 +302,7 @@ if lets_pretrain:
                                      line_search_fn=True, batch_mode=False)
 
     semisup_model.network.train()    
-    for i in range(1):
+    for i in range(10):
         pretraining_optimizer.step(pretraining_closure)
             
         if (i%2)==0:
@@ -366,7 +368,7 @@ for i in range(1):
     if i%2==0:
         loss = finetuning_closure()
         print(loss.item())
-save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_1_20220613.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_10_1_20220613.pth")
 
 feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
 print(semisup_model.selector.th)
@@ -378,11 +380,11 @@ for i in range(9):
     if i%2==0:
         loss = finetuning_closure()
         print(loss.item())
-save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_10_20220613.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_10_10_20220613.pth")
 
 for i in range(90):
     f_opt.step(finetuning_closure)
     if i%2==0:
         loss = finetuning_closure()
         print(loss.item())
-save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_100_20220613.pth")
+save(semisup_model, f"./qho_weights/pub/lambdas/jointtrained_semisup_model_lambda1_{REG_INTENSITY}_noise{case}_10_100_20220613.pth")
