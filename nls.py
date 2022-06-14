@@ -60,7 +60,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noise_intensity = 0.01/np.sqrt(2); noisy_xt = True; noisy_labels = True
+noise_intensity = 0.01/np.sqrt(2); noisy_xt = False; noisy_labels = True
 
 if noisy_xt:
     print("Noisy (x, t)")
@@ -169,7 +169,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 0.1; print(REG_INTENSITY)
+REG_INTENSITY = 1e-1; print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -331,11 +331,11 @@ print(feature_importance)
 print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
 
 ep = 0
-for i in range(1):
+for i in range(50):
     f_opt.step(finetuning_closure)
     if i%2==0:
         loss = finetuning_closure()
         print(loss.item())
     ep += 1
-
-save(semisup_model, f"./nls_weights/lambdas/semisup_model_{name}_{REG_INTENSITY}_ep{ep}.pth")
+    if ep == 1 or ep == 10 or ep == 50:
+        save(semisup_model, f"./nls_weights/lambdas/semisup_model_{name}_{REG_INTENSITY}_pretrain1_finetune{ep}.pth")
