@@ -1,1 +1,1 @@
-vim qho_pinn_learned_coeffs_20220613.py
+vim nls.py

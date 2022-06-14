@@ -60,7 +60,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noise_intensity = 0.01/np.sqrt(2); noisy_xt = True; noisy_labels = True
+noise_intensity = 0.01/np.sqrt(2); noisy_xt = False; noisy_labels = False
 
 if noisy_xt:
     print("Noisy (x, t)")
@@ -169,7 +169,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1e-1; print(REG_INTENSITY)
+REG_INTENSITY = 1; print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -237,9 +237,13 @@ semisup_model = SemiSupModel(
 ).to(device)
 
 untrained_path = "./nls_weights/lambdas/untrained_semisup_model.pth"
-use_untrained_path = False
-if not use_untrained_path: save(semisup_model, untrained_path)
-else: semisup_model = load_weights(semisup_model, untrained_path)
+use_untrained_path = True
+if not use_untrained_path: 
+    save(semisup_model, untrained_path); 
+    print("Save the untrained weights.")
+else: 
+    semisup_model = load_weights(semisup_model, untrained_path)
+    print("Use the same untrained semisup_model for the starting for alg1.")
 
 X_train = X_train.to(device)
 h_train = h_train.to(device)
@@ -277,8 +281,8 @@ if lets_pretrain:
             print('Test MSE:', string_test_performance)
 
     X_selector, y_selector = semisup_model.network.get_selector_data(*dimension_slicing(X_train))
-    semisup_model.mini = torch.tensor(X_selector.min(axis=0), dtype=torch.cfloat).to(device)
-    semisup_model,axi = torch.tensor(X_selector.max(axis=0), dtype=torch.cfloat).to(device)
+    semisup_model.mini = torch.tensor(torch.abs(X_selector).min(axis=0).values, dtype=torch.cfloat).to(device)
+    semisup_model.maxi = torch.tensor(torch.abs(X_selector).max(axis=0).values, dtype=torch.cfloat).to(device)
 
 WWW = 1e-3
 def pcgrad_closure(return_list=False):
