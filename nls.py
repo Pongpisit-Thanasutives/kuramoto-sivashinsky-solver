@@ -54,7 +54,7 @@ N = 2500
 N = min(N, X_star.shape[0])
 idx = np.random.choice(X_star.shape[0], N, replace=False)
 if force_save: np.save("./nls_weights/new/idx.npy", idx); print("Saving indices and noises...")
-else: idx = np.load("./nls_weights/new/idx.npy"); print("Loading indices and noises...")
+else: idx = np.load("./nls_weights/new/idx.npy"); print(f"Loading {len(idx)} indices and noises...")
 
 X_train = X_star[idx, :]
 u_train = u_star[idx, :]
@@ -84,6 +84,11 @@ if noisy_labels:
 
     del v_noise, u_noise
 else: print("Clean labels")
+
+mode = int(noisy_xt)+int(noisy_labels)
+name = "cleanall"
+if mode == 1: name = "noise1"
+elif mode == 2: name = "noise2"
 
 # Converting to tensor
 X_star = to_tensor(X_star, True).to(device)
@@ -164,8 +169,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1e-1
-print(REG_INTENSITY)
+REG_INTENSITY = 1e-1; print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -232,6 +236,11 @@ semisup_model = SemiSupModel(
     maxi=None,
 ).to(device)
 
+untrained_path = "./nls_weights/lambdas/untrained_semisup_model.pth"
+use_untrained_path = False
+if not use_untrained_path: save(semisup_model, untrained_path)
+else: semisup_model = load_weights(semisup_model, untrained_path)
+
 X_train = X_train.to(device)
 h_train = h_train.to(device)
 X_star = X_star.to(device)
@@ -286,8 +295,7 @@ def pcgrad_closure(return_list=False):
 # Joint training
 optimizer = MADGRAD([{'params':semisup_model.network.parameters()}, {'params':semisup_model.selector.parameters()}], lr=1e-6)
 optimizer.param_groups[0]['lr'] = 1e-7
-# optimizer.param_groups[1]['lr'] = 5e-2
-optimizer.param_groups[1]['lr'] = 1e-1
+optimizer.param_groups[1]['lr'] = 1e-1 # 5e-2
 
 # Use ~idx to sample adversarial data points
 for i in range(1500):
@@ -302,7 +310,7 @@ for i in range(1500):
         print(loss)
 
 # Fine-tuning the solver network
-f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=0.1, max_iter=500, max_eval=int(1.25*500), history_size=300)
+f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=1e-1, max_iter=500, max_eval=int(1.25*500), history_size=300)
 
 def finetuning_closure():
     global N, X_train, h_train
@@ -314,13 +322,17 @@ def finetuning_closure():
 semisup_model.network.train()
 semisup_model.selector.eval()
 
+feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
+print(semisup_model.selector.th)
+print(feature_importance)
+print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
+
+ep = 0
 for i in range(10):
     f_opt.step(finetuning_closure)
     if i%2==0:
         loss = finetuning_closure()
         print(loss.item())
+    ep += 1
 
-feature_importance = semisup_model.selector.latest_weighted_features.cpu().detach().numpy()
-print(semisup_model.selector.th)
-print(feature_importance)
-print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
+save(semisup_model, f"./nls_weights/lambdas/semisup_model_{name}_{REG_INTENSITY}_ep{ep}.pth")
