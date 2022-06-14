@@ -260,8 +260,8 @@ if lets_pretrain:
     
     print("Pretraining")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(),
-                                     lr=1e-1, max_iter=500,
-                                     max_eval=int(500*1.25), history_size=300,
+                                     lr=1e-1, max_iter=300,
+                                     max_eval=int(300*1.25), history_size=150,
                                      line_search_fn=True, batch_mode=False)
 
     semisup_model.network.train()    
