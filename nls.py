@@ -60,7 +60,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noise_intensity = 0.01/np.sqrt(2); noisy_xt = False; noisy_labels = True
+noise_intensity = 0.01/np.sqrt(2); noisy_xt = True; noisy_labels = True
 
 if noisy_xt:
     print("Noisy (x, t)")
@@ -331,7 +331,7 @@ print(feature_importance)
 print(feature_importance-semisup_model.selector.th+(1/len(feature_importance)))
 
 ep = 0
-for i in range(10):
+for i in range(1):
     f_opt.step(finetuning_closure)
     if i%2==0:
         loss = finetuning_closure()
