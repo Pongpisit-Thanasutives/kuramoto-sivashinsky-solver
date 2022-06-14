@@ -79,11 +79,9 @@ v_train = np.imag(h_train)
 V = potential[idx, :]
 
 # adding noise
-denoise = False
-if denoise:
-    modelname = "dft"
-else:
-    modelname = "nodft"
+denoise = True
+if denoise: modelname = "dft"
+else: modelname = "nodft"
 print(modelname)
 
 noise_intensity = 0.01/np.sqrt(2)
@@ -312,7 +310,7 @@ h_xx = complex_diff(h_x, xx, device)
 df = torch.cat([cplx2tensor(hf)*torch.tensor(potential).float().to(device), h_xx], dim=-1)
 sol = torch.linalg.lstsq(df.detach(), h_t.detach()).solution
 # print(sol.flatten())
-cns = list(sol.numpy().flatten())
+cns = list(sol.cpu().numpy().flatten())
 # print(cns)
 
 del xx, tt, X_star_norm, hf, h_t, h_x, h_xx, sol
@@ -330,13 +328,8 @@ pinn = ComplexPINN(model=complex_model, loss_fn=mod, index2features=feature_name
                    scale=True, lb=lb, ub=ub, 
                    init_cs=(0.1, 0.1), init_betas=(1e-5, 1e-5)).to(device)
 
-pinn.param0_real.requires_grad_(True)
-pinn.param0_imag.requires_grad_(True)
-pinn.param1_real.requires_grad_(True)
-pinn.param1_imag.requires_grad_(True)
-
 def closure1():
-    global X_train, h_train, update_pde_params, pure_imag
+    global X_train, h_train
     if torch.is_grad_enabled(): optimizer1.zero_grad(set_to_none=True)
     losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), 
                       h_train, (h_train_fft, h_train_PSD), 
@@ -346,7 +339,7 @@ def closure1():
     return l
 
 def closure2():
-    global X_train, h_train, update_pde_params, pure_imag
+    global X_train, h_train
     if torch.is_grad_enabled(): optimizer2.zero_grad(set_to_none=True)
     losses = pinn.loss(X_train, (x_fft, x_PSD, t_fft, t_PSD), 
                       h_train, (h_train_fft, h_train_PSD), 
@@ -365,17 +358,22 @@ h_train_fft, h_train_PSD = (h_train_fft).to(device), (h_train_PSD).to(device)
 # print(pinn.param1_real)
 # print(pinn.param1_imag)
 
+epochs1, epochs2 = 50, 20
+
 print(">>> 1st optimization")
-epochs1, epochs2 = 200, 200
+pinn.param0_real.requires_grad_(True)
+pinn.param0_imag.requires_grad_(True)
+pinn.param1_real.requires_grad_(True)
+pinn.param1_imag.requires_grad_(True)
 if mode > 0: optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 else: optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=300, max_eval=int(300*1.25), history_size=150, line_search_fn='strong_wolfe')
 for i in range(epochs1):
     optimizer1.step(closure1)
-    l = closure()
     if (i % 5) == 0 or i == epochs1-1:
+        l = closure1()
         print("Epoch {}: ".format(i), l.item())
 
-g1, g2 = -1j, 0.5j
+g1, g2 = -1j, +0.5j
 est1 = pinn.param0_real.item() + 1j*pinn.param0_imag.item()
 est2 = pinn.param1_real.item() + 1j*pinn.param1_imag.item()
 errs = np.array([np.abs(est1-g1)/np.abs(g1), np.abs(est2-g2)/np.abs(g2)])*100
@@ -384,21 +382,30 @@ print(est2)
 print(errs.mean(), errs.std())
 
 print(">>> 2nd optimization")
+#pinn = ComplexPINN(model=pinn.model, loss_fn=mod, index2features=feature_names,
+#                   scale=True, lb=lb, ub=ub,
+#                   init_cs=(0.1, 0.1), init_betas=(1e-5, 1e-5)).to(device)
+pinn.param0_real.requires_grad_(False)
+pinn.param0_imag.requires_grad_(False)
+pinn.param1_real.requires_grad_(False)
+pinn.param1_imag.requires_grad_(False)
 if mode > 0: optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=500, max_eval=int(500*1.25), history_size=300, line_search_fn='strong_wolfe')
 else: optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=300, max_eval=int(300*1.25), history_size=150, line_search_fn='strong_wolfe')
 for i in range(epochs2):
     optimizer2.step(closure2)
-    l = closure2()
     if (i % 5) == 0 or i == epochs2-1:
+        l = closure2()
         print("Epoch {}: ".format(i), l.item())
 
-est1 = pinn.final_param_buffer[0]; est2 = pinn.final_param_buffer[1]
+est1 = pinn.final_param_buffer[0].cpu().numpy(); est2 = pinn.final_param_buffer[1].cpu().numpy()
 errs = np.array([np.abs(est1-g1)/np.abs(g1), np.abs(est2-g2)/np.abs(g2)])*100
 print(est1)
 print(est2)
 print(errs.mean(), errs.std())
 
-# save(pinn, f"./qho_weights/pub/{name}_161x512_{modelname}_pinn_learned.pth")
+if errs.mean() < 0.26: 
+    save(pinn, f"./qho_weights/pub/lambdas/dPINNs/{name}_{modelname}_pinn.pth")
+    print("Save weights!!!")
 
 # X_star, h_star = X_star.to(device), h_star.to(device)
 # print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())
