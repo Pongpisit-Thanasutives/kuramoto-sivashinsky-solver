@@ -60,7 +60,7 @@ X_train = X_star[idx, :]
 u_train = u_star[idx, :]
 v_train = v_star[idx, :]
 
-noise_intensity = 0.01/np.sqrt(2); noisy_xt = False; noisy_labels = False
+noise_intensity = 0.01/np.sqrt(2); noisy_xt = False; noisy_labels = True
 
 if noisy_xt:
     print("Noisy (x, t)")
@@ -169,7 +169,7 @@ class ComplexNetwork(nn.Module):
     def neural_net_scale(self, inp):
         return -1+2*(inp-self.lb)/(self.ub-self.lb)
 
-REG_INTENSITY = 1; print(REG_INTENSITY)
+REG_INTENSITY = 0.1; print(REG_INTENSITY)
 class ComplexAttentionSelectorNetwork(nn.Module):
     def __init__(self, layers, prob_activation=torch.sigmoid, bn=None, reg_intensity=REG_INTENSITY):
         super(ComplexAttentionSelectorNetwork, self).__init__()
@@ -191,7 +191,6 @@ class ComplexAttentionSelectorNetwork(nn.Module):
         
     def forward(self, inn):
         return self.nonlinear_model((inn*(F.relu(self.weighted_features(inn)-self.th))))
-        # return self.nonlinear_model(inn*F.threshold(self.weighted_features(inn), self.th, 0.0))
     
     def weighted_features(self, inn):
         self.latest_weighted_features = self.prob_activation(self.linear1(inn).real).mean(dim=0)
@@ -266,7 +265,7 @@ if lets_pretrain:
                                      line_search_fn=True, batch_mode=False)
 
     semisup_model.network.train()    
-    for i in range(10):
+    for i in range(1):
         pretraining_optimizer.step(pretraining_closure)
             
         if (i%2)==0:
