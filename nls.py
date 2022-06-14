@@ -87,8 +87,10 @@ else: print("Clean labels")
 
 mode = int(noisy_xt)+int(noisy_labels)
 name = "cleanall"
+MAX_ITER, HIS = 500, 300
 if mode == 1: name = "noise1"
 elif mode == 2: name = "noise2"
+if mode > 0: MAX_ITER, HIS = 300, 150
 
 # Converting to tensor
 X_star = to_tensor(X_star, True).to(device)
@@ -260,8 +262,8 @@ if lets_pretrain:
     
     print("Pretraining")
     pretraining_optimizer = LBFGSNew(semisup_model.network.parameters(),
-                                     lr=1e-1, max_iter=300,
-                                     max_eval=int(300*1.25), history_size=150,
+                                     lr=1e-1, max_iter=MAX_ITER,
+                                     max_eval=int(MAX_ITER*1.25), history_size=HIS,
                                      line_search_fn=True, batch_mode=False)
 
     semisup_model.network.train()    
@@ -313,7 +315,7 @@ for i in range(1500):
         print(loss)
 
 # Fine-tuning the solver network
-f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=1e-1, max_iter=300, max_eval=int(1.25*300), history_size=300//2)
+f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=1e-1, max_iter=MAX_ITER, max_eval=int(1.25*MAX_ITER), history_size=HIS)
 
 def finetuning_closure():
     global N, X_train, h_train
