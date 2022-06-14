@@ -313,7 +313,7 @@ for i in range(1500):
         print(loss)
 
 # Fine-tuning the solver network
-f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=1e-1, max_iter=500, max_eval=int(1.25*500), history_size=300)
+f_opt = torch.optim.LBFGS(semisup_model.network.parameters(), lr=1e-1, max_iter=300, max_eval=int(1.25*300), history_size=300//2)
 
 def finetuning_closure():
     global N, X_train, h_train
