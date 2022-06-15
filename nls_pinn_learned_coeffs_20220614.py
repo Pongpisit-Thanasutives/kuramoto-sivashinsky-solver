@@ -25,8 +25,8 @@ print("You're running on", device)
 
 # Adding noise
 noise_intensity = 0.01/np.sqrt(2)
-noisy_xt = True; noisy_labels = True
-DENOISE = False
+noisy_xt = False; noisy_labels = False
+DENOISE = True
 mode = int(noisy_xt)+int(noisy_labels)
 
 # Doman bounds
@@ -104,8 +104,8 @@ class RobustComplexPINN(nn.Module):
         self.model = model
         
         # Beta-Robust PCA
-        self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=True, inp_dims=2, hidden_dims=50)
-        self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=True, inp_dims=2, hidden_dims=50)
+        self.inp_rpca = RobustPCANN(beta=init_betas[0], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
+        self.out_rpca = RobustPCANN(beta=init_betas[1], is_beta_trainable=True, inp_dims=2, hidden_dims=32)
 
         self.callable_loss_fn = loss_fn
         self.learn = learnable_pde_coeffs; self.coeff_buffer = None
@@ -156,7 +156,6 @@ class RobustComplexPINN(nn.Module):
         if update_pde_params:
             if self.learn: 
                 eq_loss = complex_mse(self.callable_loss_fn(grads_dict), u_t)
-                # self.coeff_buffer = self.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
             else: 
                 H = cat(grads_dict['X0']*grads_dict['X1'], grads_dict['X2'])
                 self.coeff_buffer = torch.linalg.lstsq(H.detach(), u_t.detach()).solution
@@ -185,8 +184,8 @@ dft_tag = "nodft"
 if DENOISE: dft_tag = "dft"
 print(dft_tag)
 
-AAA = 1
-BBB = 1
+AAA = 0.5
+BBB = 0.5
 
 def closure1():
     global X_train, X_train_S, h_train, h_train_S, x_fft, x_PSD, t_fft, t_PSD
@@ -280,10 +279,11 @@ del noise_x, noise_t
 del X_star, X_dis, xx, tt 
 del predictions, h, h_x, h_xx, abs_h
 
-cs = 1e-1, init_beta = 1e-5
+cs = 1e-1; init_beta = 1e-5
 pinn = RobustComplexPINN(model=complex_model, loss_fn=mod, 
                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
-                         init_cs=(cs, cs), init_betas=(init_beta, init_beta)).to(device)
+                         init_cs=(cs, cs), init_betas=(init_beta, init_beta), 
+                         learnable_pde_coeffs=True).to(device)
 
 save_weights_at1 = f"./nls_weights/lambdas/dPINNs/nls_{dft_tag}_{tag}_opt1.pth"
 save_weights_at2 = f"./nls_weights/lambdas/dPINNs/nls_{dft_tag}_{tag}_opt2.pth"
@@ -291,8 +291,8 @@ save_weights_at2 = f"./nls_weights/lambdas/dPINNs/nls_{dft_tag}_{tag}_opt2.pth"
 grounds = np.array([1j, 0+0.5j])
 
 epochs1, epochs2 = 60, 30
-optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
 pinn.train(); pinn.set_learnable_coeffs(True)
+optimizer1 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
 print('1st Phase')
 for i in range(epochs1):
     optimizer1.step(closure1)
@@ -307,6 +307,10 @@ for i in range(epochs1):
 save(pinn, save_weights_at1)
 
 if epochs2 > 0:
+#    pinn = RobustComplexPINN(model=pinn.model, loss_fn=mod, 
+#                             index2features=feature_names, scale=True, lb=lb, ub=ub, 
+#                             init_cs=(cs, cs), init_betas=(init_beta, init_beta), 
+#                             learnable_pde_coeffs=False).to(device)
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=1000, max_eval=1000, history_size=1000, line_search_fn='strong_wolfe')
     print('2nd Phase')
@@ -315,7 +319,7 @@ if epochs2 > 0:
         if (i % 10) == 0 or i == epochs2-1:
             l = closure2()
             print("Epoch {}: ".format(i), l.item())
-            pred_params = pinn.callable_loss_fn.complex_coeffs().cpu().detach().numpy().ravel()
+            pred_params = pinn.coeff_buffer.cpu().detach().numpy().ravel()
             print(pred_params)
             errs = 100*np.abs(pred_params-grounds)/np.abs(grounds)
             print(errs.mean(), errs.std())
