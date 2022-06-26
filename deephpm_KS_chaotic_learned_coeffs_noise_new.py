@@ -96,7 +96,7 @@ elif state == 2:
     name = "noisy2"
 elif state == 1:
     program = [-0.846190, -0.766933, -0.855584]
-    # for noisy2 pub
+    # for noisy1 pub
     program = [-0.897309, -0.849259, -0.930757]
     name = "noisy1"
 program = f'''

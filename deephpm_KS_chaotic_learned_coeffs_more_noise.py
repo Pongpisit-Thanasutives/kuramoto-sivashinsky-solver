@@ -64,9 +64,6 @@ if noisy_labels:
     u_train = u_train + u_noise
 else: print("Clean labels")
 
-u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
-X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
-
 noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
@@ -172,14 +169,12 @@ class RobustPINN(nn.Module):
             X_input_noise = cat(torch.fft.ifft(self.in_fft_nn(X_input_noise[1])*X_input_noise[0]).real.reshape(-1, 1), 
                                 torch.fft.ifft(self.in_fft_nn(X_input_noise[3])*X_input_noise[2]).real.reshape(-1, 1))
             X_input_noise = X_input-X_input_noise
-            # X_input_noise = X_noise_wiener
             # Work for high noise
             # X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=True, axis=0, apply_tanh=False)
             X_input = self.inp_rpca(X_input, X_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=0, apply_tanh=True)
             
             # (2) Denoising FFT on y_input
             y_input_noise = y_input-torch.fft.ifft(self.out_fft_nn(y_input_noise[1])*y_input_noise[0]).real.reshape(-1, 1)
-            # y_input_noise = u_noise_wiener
             # Work for high noise
             # y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=True, axis=None, apply_tanh=False)
             y_input = self.out_rpca(y_input, y_input_noise, normalize=True, center=True, is_clamp=(-1.0, 1.0), axis=None, apply_tanh=True)
