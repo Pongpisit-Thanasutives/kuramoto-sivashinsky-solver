@@ -43,7 +43,7 @@ else: idx = np.load("./weights/final/idx.npy")
 X_u_train = X_star[idx, :]
 u_train = u_star[idx,:]
 
-noise_intensity = 0.01; double = 10
+noise_intensity = 0.01; double = 3
 double = int(double)
 print(f"double = {double}")
 noisy_xt = True; noisy_labels = True; state = int(noisy_xt)+int(noisy_labels)
@@ -67,7 +67,7 @@ else: print("Clean labels")
 u_noise_wiener = to_tensor(u_train-wiener(u_train, noise=1e-5), False).to(device)
 X_noise_wiener = to_tensor(X_u_train-wiener(X_u_train, noise=1e-2), False).to(device)
 
-noiseless_mode = False
+noiseless_mode = True
 if noiseless_mode: model_name = "nodft"
 else: model_name = "dft"
 print(model_name)
@@ -332,11 +332,11 @@ errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 
 if epochs2 > 0:
-#    if not noiseless_mode:
-#        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
-#                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
-#                          pretrained=True, noiseless_mode=noiseless_mode, 
-#                          init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
+    if not noiseless_mode:
+        pinn = RobustPINN(model=pinn.model, loss_fn=mod, 
+                          index2features=feature_names, scale=True, lb=lb, ub=ub, 
+                          pretrained=True, noiseless_mode=noiseless_mode, 
+                          init_cs=(alpha, alpha), init_betas=(1e-2, 1e-2)).to(device)
 
     pinn.set_learnable_coeffs(False)
     optimizer2 = torch.optim.LBFGS(pinn.parameters(), lr=1e-1, max_iter=MMM, max_eval=int(MMM*1.25), history_size=MMM, line_search_fn='strong_wolfe')
@@ -356,6 +356,8 @@ print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
 bs = -1
+# bs = 15.95
+# bs = 43.43
 # bs = 17.478683
 if errs.mean() < bs:
     save(pinn, saved_last_weights)

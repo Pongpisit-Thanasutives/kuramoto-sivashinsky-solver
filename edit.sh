@@ -1,1 +1,1 @@
-vim nls_pinn_learned_coeffs_20220614.py
+vim deephpm_KS_chaotic_learned_coeffs_cleanall_new.py
