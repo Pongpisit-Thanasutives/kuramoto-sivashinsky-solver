@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# This codes are old and deprecated.
 import os
 from glob import glob
 

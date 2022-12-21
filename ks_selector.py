@@ -33,8 +33,8 @@ ub = X_star.max(axis=0)
 lb = X_star.min(axis=0)
 
 # For identification
-# N = 30000
-N = 1024*21
+# N = 30000 # Noisy experiments
+N = 1024*21 # Clean experiment
 
 # idx = np.random.choice(X_star.shape[0], N, replace=False)
 idx = np.arange(N)
@@ -166,8 +166,6 @@ class AttentionSelectorNetwork(nn.Module):
         self.latest_weighted_features = None
         self.th = (1/layers[0])-(1e-10)
         self.reg_intensity = reg_intensity
-#         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 10.0, 1.0]).to(device)
-#         self.w = (1e-2)*torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0]).to(device)
         self.w = (1e-1)*torch.tensor([1.0, 1.0, 2.0, 3.0, 4.0, 5.0]).to(device)
         self.al = ApproxL0(sig=1.0)
         self.gamma = nn.Parameter(torch.ones(layers[0]).float()).requires_grad_(True)
