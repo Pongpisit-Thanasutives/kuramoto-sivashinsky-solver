@@ -1,6 +1,10 @@
 # coding: utf-8
 print("Only for the cleanall experiment!!!")
 import torch; device = torch.device("cuda"); print(device)
+import random
+# seed_value = random.randint(0, 1e6)
+seed_value = 112273 # 23640
+torch.manual_seed(seed_value)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F
 
@@ -341,4 +345,4 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-if errs.mean() < 0.308: save(pinn, save_weights_at)
+# if errs.mean() < 0.308: save(pinn, save_weights_at)
