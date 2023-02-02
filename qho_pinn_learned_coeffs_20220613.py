@@ -403,9 +403,8 @@ print(est1)
 print(est2)
 print(errs.mean(), errs.std())
 
-if errs.mean() < 0.26: 
-    save(pinn, f"./qho_weights/pub/lambdas/dPINNs/{name}_{modelname}_pinn.pth")
-    print("Save weights!!!")
+# save(pinn, f"./qho_weights/pub/lambdas/dPINNs/{name}_{modelname}_pinn.pth")
+# print("Save weights!!!")
 
 # X_star, h_star = X_star.to(device), h_star.to(device)
 # print("Test MSE:", complex_mse(pinn(X_star[:, 0:1], X_star[:, 1:2]), h_star).item())

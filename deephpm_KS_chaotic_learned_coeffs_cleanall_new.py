@@ -363,6 +363,6 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-if errs.mean() < 0.7557:
-    save(pinn, f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}_ft4_pub.pth")
-    print("Save weights!!!")
+
+# save(pinn, f"./weights/final/new/deephpm_KS_chaotic_{model_name}_learnedcoeffs_1024x21_last_{name}_ft4_pub.pth")
+# print("Save weights!!!")

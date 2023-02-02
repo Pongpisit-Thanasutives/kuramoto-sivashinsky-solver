@@ -350,10 +350,5 @@ else: pred_params = np.array([pinn.param0.item(), pinn.param1.item(), pinn.param
 print(pred_params)
 errs = 100*np.abs(pred_params+1)
 print(errs.mean(), errs.std())
-bs = -1
-# bs = 15.95
-# bs = 43.43
-# bs = 17.478683
-if errs.mean() < bs:
-    save(pinn, saved_last_weights)
-    print("Saving better weights!")
+# save(pinn, saved_last_weights)
+# print("Saving better weights!")

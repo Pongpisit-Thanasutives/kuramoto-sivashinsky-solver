@@ -2,8 +2,7 @@
 print("Only for the cleanall experiment!!!")
 import torch; device = torch.device("cuda"); print(device)
 import random
-# seed_value = random.randint(0, 1e6)
-seed_value = 112273 # 23640
+seed_value = 112273 # for reproducibility
 torch.manual_seed(seed_value)
 from torch.autograd import grad, Variable
 import torch.nn.functional as F

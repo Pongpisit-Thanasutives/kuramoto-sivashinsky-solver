@@ -341,7 +341,8 @@ if lets_pretrain:
             l = pretraining_closure()
             curr_loss = l.item()
             print("Epoch {}: ".format(i), curr_loss)
-            # Validation performance...
+            # Validation performance for the pilot study
+            # Anyway, not moving on with any of the saved weights
             semisup_model.network.eval()
             test_performance = F.mse_loss(semisup_model.network(*dimension_slicing(X_star)).detach(), u_star).item()
             if test_performance < best_loss:

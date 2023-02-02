@@ -342,5 +342,4 @@ if epochs2 > 0:
             print(pred_params)
             errs = 100*np.abs(np.array([(pred_params[0]+6)/6.0, pred_params[1]+1])); print(errs.mean(), errs.std())
 
-if errs.mean()<0.49: save(pinn, save_weights_at); print("save")
-else: print("did not save")
+# save(pinn, save_weights_at); print("save")
